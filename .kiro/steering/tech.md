@@ -101,19 +101,28 @@ npx nuxt-queuekit worker --concurrency <num>  # Set concurrent jobs (default: 5)
 
 ## API Usage
 
-### Client-side (from Vue components)
+### Client-side (Vue components)
 
 ```typescript
-// Add a job to the queue
-const { $queue } = useNuxtApp()
-await $queue.add('job-name', { data: 'value' })
+// Use the client composable - returns reactive refs
+const queue = useQueue('default')
+
+// One-liner with real-time monitoring
+const { progress, status, result, error } = await queue.add('SendEmail', { 
+  to: 'user@example.com' 
+})
+
+// progress, status, result, error are reactive refs that update automatically
+watch(progress, (value) => {
+  console.log(`Progress: ${value}%`)
+})
 ```
 
-### Server-side (from API routes)
+### Server-side (API routes, server utils)
 
 ```typescript
-// Use the queue composable
-const queue = useQueue('default')
+// Use the server composable - returns BullMQ Queue instance
+const queue = useServerQueue('default')
 await queue.add('job-name', { data: 'value' })
 ```
 

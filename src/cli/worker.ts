@@ -4,6 +4,29 @@ import { resolve } from 'pathe'
 import { loadNuxtConfig } from '@nuxt/kit'
 import { Worker, type Processor, type ConnectionOptions, type Job } from 'bullmq'
 import { pathToFileURL } from 'node:url'
+import Redis from 'ioredis'
+
+interface JobEvent {
+  jobId: string
+  queueName: string
+  jobName: string
+  type: 'progress' | 'completed' | 'failed' | 'active' | 'waiting'
+  data?: unknown
+  progress?: number
+  result?: unknown
+  error?: string
+  timestamp: number
+}
+
+async function publishJobEvent(redis: Redis, event: JobEvent): Promise<void> {
+  try {
+    const channel = `queue:${event.queueName}:job:${event.jobId}`
+    await redis.publish(channel, JSON.stringify(event))
+  }
+  catch (error) {
+    consola.debug('Failed to publish job event:', error)
+  }
+}
 
 export default defineCommand({
   meta: {
@@ -73,6 +96,15 @@ export default defineCommand({
       consola.info('Redis connection:', {
         host: connection.host,
         port: connection.port,
+        db: connection.db,
+      })
+
+      // Create Redis publisher for events
+      const publisher = new Redis({
+        host: connection.host,
+        port: connection.port,
+        password: connection.password,
+        username: connection.username,
         db: connection.db,
       })
 
@@ -200,6 +232,31 @@ export default defineCommand({
           if (jobDefinition) {
             consola.info(`Processing job ${job.id}: ${job.name} from queue: ${job.queueName}`)
 
+            // Publish active event
+            await publishJobEvent(publisher, {
+              jobId: job.id!,
+              queueName: job.queueName,
+              jobName: job.name,
+              type: 'active',
+              timestamp: Date.now(),
+            })
+
+            // Wrap job.updateProgress to publish progress events
+            const originalUpdateProgress = job.updateProgress.bind(job)
+            job.updateProgress = async (progress: number | object) => {
+              await originalUpdateProgress(progress)
+
+              const progressValue = typeof progress === 'number' ? progress : 0
+              await publishJobEvent(publisher, {
+                jobId: job.id!,
+                queueName: job.queueName,
+                jobName: job.name,
+                type: 'progress',
+                progress: progressValue,
+                timestamp: Date.now(),
+              })
+            }
+
             try {
               const result = await jobDefinition.handle(job.data, job)
               return result
@@ -214,6 +271,15 @@ export default defineCommand({
             // Fallback to default processor
             consola.info(`Processing job ${job.id}: ${job.name} from queue: ${job.queueName}`)
             consola.debug('Job data:', job.data)
+
+            // Publish active event
+            await publishJobEvent(publisher, {
+              jobId: job.id!,
+              queueName: job.queueName,
+              jobName: job.name,
+              type: 'active',
+              timestamp: Date.now(),
+            })
 
             return {
               processed: true,
@@ -250,6 +316,16 @@ export default defineCommand({
         worker.on('completed', async (job) => {
           consola.success(`[${queueName}] Job ${job.id} completed`)
 
+          // Publish completed event
+          await publishJobEvent(publisher, {
+            jobId: job.id!,
+            queueName: job.queueName,
+            jobName: job.name,
+            type: 'completed',
+            result: job.returnvalue,
+            timestamp: Date.now(),
+          })
+
           // Call job's onCompleted hook if defined
           const jobDefinition = jobRegistry.get(job.name)
           if (jobDefinition?.onCompleted) {
@@ -265,6 +341,18 @@ export default defineCommand({
 
         worker.on('failed', async (job, err) => {
           consola.error(`[${queueName}] Job ${job?.id} failed:`, err.message)
+
+          // Publish failed event
+          if (job) {
+            await publishJobEvent(publisher, {
+              jobId: job.id!,
+              queueName: job.queueName,
+              jobName: job.name,
+              type: 'failed',
+              error: err.message,
+              timestamp: Date.now(),
+            })
+          }
 
           // Call job's onFailed hook only after all retries are exhausted
           if (job) {
@@ -306,6 +394,7 @@ export default defineCommand({
       const shutdown = async () => {
         consola.info('Shutting down workers...')
         await Promise.all(workers.map(w => w.close()))
+        await publisher.quit()
         consola.success('All workers closed')
         process.exit(0)
       }

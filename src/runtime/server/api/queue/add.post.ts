@@ -1,12 +1,12 @@
 import { defineEventHandler, readBody, createError } from 'h3'
-import { useQueue } from '../../utils/composables'
+import { useServerQueue } from '../../utils/composables'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const { queueName = 'default', jobName, data, options } = body
 
   try {
-    const queue = useQueue(queueName)
+    const queue = useServerQueue(queueName)
     const job = await queue.add(jobName, data, options)
 
     return {

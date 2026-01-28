@@ -1,5 +1,5 @@
-import type { JobsOptions } from 'bullmq'
-import { useQueue } from './composables'
+import type { JobsOptions, Job } from 'bullmq'
+import { useServerQueue } from './composables'
 import { getJob } from './jobRegistry'
 
 export interface DispatchOptions extends Omit<JobsOptions, 'jobId'> {
@@ -11,14 +11,15 @@ export interface DispatchOptions extends Omit<JobsOptions, 'jobId'> {
  *
  * @example
  * ```typescript
- * await dispatch('SendEmailJob', { to: 'user@example.com' })
+ * const job = await dispatch('SendEmailJob', { to: 'user@example.com' })
+ * console.log('Job ID:', job.id)
  * ```
  */
-export async function dispatch<T = unknown>(
+export async function dispatch<T = unknown, R = unknown, N extends string = string>(
   jobName: string,
   data: T,
   options?: DispatchOptions,
-) {
+): Promise<Job<T, R, N>> {
   const jobDefinition = getJob(jobName)
 
   if (!jobDefinition) {
@@ -26,7 +27,7 @@ export async function dispatch<T = unknown>(
   }
 
   const queueName = options?.queue || jobDefinition.queue || 'default'
-  const queue = useQueue(queueName)
+  const queue = useServerQueue(queueName)
 
   // Merge job definition options with dispatch options
   const jobOptions = {
@@ -37,10 +38,5 @@ export async function dispatch<T = unknown>(
   // Only pass options if there are any
   const finalOptions = Object.keys(jobOptions).length > 0 ? jobOptions : undefined
 
-  const result = await queue.add(jobName, data, finalOptions)
-
-  return {
-    jobId: result.id,
-    queueName,
-  }
+  return await queue.add(jobName, data, finalOptions) as Job<T, R, N>
 }

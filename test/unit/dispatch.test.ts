@@ -4,9 +4,9 @@ import { registerJob } from '../../src/runtime/server/utils/jobRegistry'
 import { defineJob } from '../../src/runtime/server/utils/defineJob'
 import * as composables from '../../src/runtime/server/utils/composables'
 
-// Mock useQueue
+// Mock useServerQueue
 vi.mock('../../src/runtime/server/utils/composables', () => ({
-  useQueue: vi.fn(),
+  useServerQueue: vi.fn(),
   useQueueConnection: vi.fn(),
 }))
 
@@ -24,8 +24,9 @@ describe('dispatch', () => {
 
     registerJob('TestJob', job)
 
-    const mockAdd = vi.fn().mockResolvedValue({ id: '123' })
-    vi.mocked(composables.useQueue).mockReturnValue({
+    const mockJob = { id: '123', name: 'TestJob', data: { foo: 'bar' } }
+    const mockAdd = vi.fn().mockResolvedValue(mockJob)
+    vi.mocked(composables.useServerQueue).mockReturnValue({
       add: mockAdd,
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -33,10 +34,8 @@ describe('dispatch', () => {
 
     const result = await dispatch('TestJob', { foo: 'bar' })
 
-    expect(result).toEqual({
-      jobId: '123',
-      queueName: 'default',
-    })
+    expect(result).toEqual(mockJob)
+    expect(result.id).toBe('123')
 
     expect(mockAdd).toHaveBeenCalledWith(
       'TestJob',
@@ -61,8 +60,9 @@ describe('dispatch', () => {
 
     registerJob('EmailJob', job)
 
-    const mockAdd = vi.fn().mockResolvedValue({ id: '456' })
-    vi.mocked(composables.useQueue).mockReturnValue({
+    const mockJob = { id: '456', name: 'EmailJob', data: { to: 'test@example.com' } }
+    const mockAdd = vi.fn().mockResolvedValue(mockJob)
+    vi.mocked(composables.useServerQueue).mockReturnValue({
 
       add: mockAdd,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -70,8 +70,9 @@ describe('dispatch', () => {
 
     const result = await dispatch('EmailJob', { to: 'test@example.com' })
 
-    expect(result.queueName).toBe('emails')
-    expect(composables.useQueue).toHaveBeenCalledWith('emails')
+    expect(result).toEqual(mockJob)
+    expect(result.id).toBe('456')
+    expect(composables.useServerQueue).toHaveBeenCalledWith('emails')
   })
 
   it('should use queue from dispatch options', async () => {
@@ -83,17 +84,19 @@ describe('dispatch', () => {
 
     registerJob('TestJob', job)
 
-    const mockAdd = vi.fn().mockResolvedValue({ id: '789' })
+    const mockJob = { id: '789', name: 'TestJob', data: { data: 'test' } }
+    const mockAdd = vi.fn().mockResolvedValue(mockJob)
 
-    vi.mocked(composables.useQueue).mockReturnValue({
+    vi.mocked(composables.useServerQueue).mockReturnValue({
       add: mockAdd,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
 
     const result = await dispatch('TestJob', { data: 'test' }, { queue: 'priority' })
 
-    expect(result.queueName).toBe('priority')
-    expect(composables.useQueue).toHaveBeenCalledWith('priority')
+    expect(result).toEqual(mockJob)
+    expect(result.id).toBe('789')
+    expect(composables.useServerQueue).toHaveBeenCalledWith('priority')
   })
 
   it('should merge job options with dispatch options', async () => {
@@ -109,17 +112,19 @@ describe('dispatch', () => {
 
     registerJob('TestJob', job)
 
-    const mockAdd = vi.fn().mockResolvedValue({ id: '999' })
-    vi.mocked(composables.useQueue).mockReturnValue({
+    const mockJob = { id: '999', name: 'TestJob', data: { data: 'test' } }
+    const mockAdd = vi.fn().mockResolvedValue(mockJob)
+    vi.mocked(composables.useServerQueue).mockReturnValue({
       add: mockAdd,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
 
-    await dispatch('TestJob', { data: 'test' }, {
+    const result = await dispatch('TestJob', { data: 'test' }, {
       delay: 5000,
       priority: 2, // Should override job definition
     })
 
+    expect(result).toEqual(mockJob)
     expect(mockAdd).toHaveBeenCalledWith(
       'TestJob',
       { data: 'test' },
@@ -140,14 +145,16 @@ describe('dispatch', () => {
 
     registerJob('SimpleJob', job)
 
-    const mockAdd = vi.fn().mockResolvedValue({ id: '111' })
-    vi.mocked(composables.useQueue).mockReturnValue({
+    const mockJob = { id: '111', name: 'SimpleJob', data: { test: true } }
+    const mockAdd = vi.fn().mockResolvedValue(mockJob)
+    vi.mocked(composables.useServerQueue).mockReturnValue({
       add: mockAdd,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
 
-    await dispatch('SimpleJob', { test: true })
+    const result = await dispatch('SimpleJob', { test: true })
 
+    expect(result).toEqual(mockJob)
     expect(mockAdd).toHaveBeenCalledWith(
       'SimpleJob',
       { test: true },

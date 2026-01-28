@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest'
-import { useQueueConnection, useQueue } from '../../src/runtime/server/utils/composables'
+import { useQueueConnection, useServerQueue } from '../../src/runtime/server/utils/composables'
 import { closeAll } from '../../src/runtime/server/utils/queue'
 
 // Mock useRuntimeConfig with localhost for unit tests
@@ -50,9 +50,9 @@ describe('Server Composables', () => {
     })
   })
 
-  describe('useQueue', () => {
+  describe('useServerQueue', () => {
     it('should create a queue with default name', async () => {
-      const queue = useQueue()
+      const queue = useServerQueue()
 
       expect(queue).toBeDefined()
       expect(queue.name).toBe('default')
@@ -63,7 +63,7 @@ describe('Server Composables', () => {
     })
 
     it('should create a queue with custom name', async () => {
-      const queue = useQueue('custom-queue')
+      const queue = useServerQueue('custom-queue')
 
       expect(queue).toBeDefined()
       expect(queue.name).toBe('custom-queue')
@@ -74,8 +74,8 @@ describe('Server Composables', () => {
     })
 
     it('should return existing queue if already created', async () => {
-      const queue1 = useQueue('test-queue')
-      const queue2 = useQueue('test-queue')
+      const queue1 = useServerQueue('test-queue')
+      const queue2 = useServerQueue('test-queue')
 
       expect(queue1).toBe(queue2)
 
@@ -85,8 +85,8 @@ describe('Server Composables', () => {
     })
 
     it('should create different queues for different names', async () => {
-      const queue1 = useQueue('queue-1')
-      const queue2 = useQueue('queue-2')
+      const queue1 = useServerQueue('queue-1')
+      const queue2 = useServerQueue('queue-2')
 
       expect(queue1).not.toBe(queue2)
       expect(queue1.name).toBe('queue-1')

@@ -1,7 +1,5 @@
-import type { Job } from 'bullmq'
-
 export default defineEventHandler(async (_event) => {
-  const queue = useQueue('data-processing')
+  const queue = useServerQueue('data-processing')
 
   // Create sample data to process
   const items = Array.from({ length: 10 }, (_, i) => ({
@@ -12,7 +10,7 @@ export default defineEventHandler(async (_event) => {
 
   const job = await queue.add('batch-process', {
     items,
-  }) as Job
+  })
 
   return {
     success: true,

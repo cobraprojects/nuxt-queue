@@ -36,7 +36,7 @@ export function useQueueConnection(): ConnectionOptions {
   return connectionConfig
 }
 
-export function useQueue<T = unknown, R = unknown, N extends string = string>(name: string = 'default') {
+export function useServerQueue<T = unknown, R = unknown, N extends string = string>(name: string = 'default') {
   const existing = getQueue(name)
   if (existing) {
     return existing as Queue<T, R, N>

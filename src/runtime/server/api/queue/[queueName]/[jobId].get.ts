@@ -1,5 +1,5 @@
 import { defineEventHandler, getRouterParams, createError } from 'h3'
-import { useQueue } from '../../../utils/composables'
+import { useServerQueue } from '../../../utils/composables'
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event)
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const queue = useQueue(queueName)
+  const queue = useServerQueue(queueName)
   const job = await queue.getJob(jobId)
 
   if (!job) {

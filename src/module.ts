@@ -80,6 +80,11 @@ export default defineNuxtModule<ModuleOptions>({
       handler: resolver.resolve('./runtime/server/api/queue/[queueName]/[jobId].get'),
     })
 
+    addServerHandler({
+      route: '/api/queue/:queueName/:jobId/events',
+      handler: resolver.resolve('./runtime/server/api/queue/[queueName]/[jobId]/events.get'),
+    })
+
     // Add plugin
     addPlugin(resolver.resolve('./runtime/plugin'))
 

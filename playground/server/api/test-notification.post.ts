@@ -1,13 +1,11 @@
-import type { Job } from 'bullmq'
-
 export default defineEventHandler(async (_event) => {
-  const queue = useQueue('notifications')
+  const queue = useServerQueue('notifications')
 
   const job = await queue.add('send-notification', {
     userId: 123,
     message: 'You have a new message!',
     type: 'push',
-  }) as Job
+  })
 
   return {
     success: true,

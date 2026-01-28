@@ -30,9 +30,11 @@ Background job queue for Nuxt applications powered by BullMQ and Redis.
 - 🚀 &nbsp;**Separate Worker Process** - Workers run independently from your web server
 - 📦 &nbsp;**BullMQ Powered** - Robust Redis-backed queue system
 - 🔄 &nbsp;**Simple API** - Easy job creation from client and server
+- ⚡ &nbsp;**Real-time Monitoring** - Live job progress updates via SSE with <100ms latency
 - 📊 &nbsp;**Job Status** - Built-in endpoints to check job progress
-- ⚡ &nbsp;**Scalable** - Run multiple worker processes for high throughput
 - 🎨 &nbsp;**Type Safe** - Full TypeScript support
+- 🔁 &nbsp;**Lifecycle Hooks** - `onCompleted` and `onFailed` callbacks with automatic event streaming
+- 🌐 &nbsp;**Scalable** - Run multiple worker processes for high throughput
 
 ## Quick Start
 
@@ -286,6 +288,54 @@ async function exportData() {
 }
 </script>
 ```
+
+### Real-time Job Monitoring
+
+Get live progress updates with zero configuration using Server-Sent Events (SSE):
+
+```vue
+<script setup>
+const queue = useQueue()
+
+async function processData() {
+  // One-liner - returns reactive refs that update automatically
+  const { progress, status, result, error } = await queue.add('ProcessData', {
+    userId: user.value.id,
+    items: 1000
+  })
+  
+  // Watch progress in real-time (<100ms latency)
+  watch(progress, (value) => {
+    console.log(`Progress: ${value}%`)
+  })
+  
+  // React to completion
+  watch(status, (value) => {
+    if (value === 'completed') {
+      toast.success('Processing complete!')
+      console.log('Result:', result.value)
+    }
+    if (value === 'failed') {
+      toast.error(`Failed: ${error.value}`)
+    }
+  })
+}
+</script>
+```
+
+**How it works:**
+- Worker publishes events to Redis Pub/Sub when job state changes
+- SSE endpoint streams events to browser in real-time
+- Reactive refs update automatically - no polling needed
+- Connection auto-closes when job completes or fails
+- Works with both `useQueue()` (client) and `dispatch()` (server)
+
+**All lifecycle events are streamed:**
+- `waiting` - Job added to queue
+- `active` - Worker started processing
+- `progress` - Job reports progress (0-100)
+- `completed` - Job finished successfully
+- `failed` - Job failed with error
 
 The job handles completion notification:
 
@@ -826,15 +876,16 @@ Dispatch a job by name (server-side only).
 - `data: any` - Job data
 - `options?: JobOptions` - Optional BullMQ job options
 
-**Returns:** `Promise<{ jobId: string }>`
+**Returns:** `Promise<Job>` - BullMQ Job object with properties like `id`, `queueName`, `data`, etc.
 
 **Example:**
 ```typescript
-const result = await dispatch('SendEmail', { to: 'user@example.com' })
-console.log(result.jobId)
+const job = await dispatch('SendEmail', { to: 'user@example.com' })
+console.log(job.id)        // Job ID
+console.log(job.queueName) // Queue name
 
 // Nested job
-await dispatch('emails.Welcome', { userId: '123' })
+const job2 = await dispatch('emails.Welcome', { userId: '123' })
 ```
 
 ### Client-Side API

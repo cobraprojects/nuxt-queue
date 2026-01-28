@@ -6,7 +6,7 @@ import { dispatch } from '../../src/runtime/server/utils/dispatch'
 import * as composables from '../../src/runtime/server/utils/composables'
 
 vi.mock('../../src/runtime/server/utils/composables', () => ({
-  useQueue: vi.fn(),
+  useServerQueue: vi.fn(),
   useQueueConnection: vi.fn(),
 }))
 
@@ -47,7 +47,7 @@ describe('File-Based Jobs Integration', () => {
 
     // 3. Mock queue
     const mockAdd = vi.fn().mockResolvedValue({ id: 'job-123' })
-    vi.mocked(composables.useQueue).mockReturnValue({
+    vi.mocked(composables.useServerQueue).mockReturnValue({
       add: mockAdd,
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,13 +58,13 @@ describe('File-Based Jobs Integration', () => {
       to: 'user@example.com',
     })
 
-    // 5. Verify
+    // 5. Verify - dispatch now returns BullMQ Job object
     expect(result).toEqual({
-      jobId: 'job-123',
-      queueName: 'emails',
+      id: 'job-123',
     })
+    expect(result.id).toBe('job-123')
 
-    expect(composables.useQueue).toHaveBeenCalledWith('emails')
+    expect(composables.useServerQueue).toHaveBeenCalledWith('emails')
     expect(mockAdd).toHaveBeenCalledWith(
       'SendEmailJob',
       { to: 'user@example.com' },
@@ -133,7 +133,7 @@ describe('File-Based Jobs Integration', () => {
     registerJob('ProgressJob', job)
 
     const mockAdd = vi.fn().mockResolvedValue({ id: 'progress-job' })
-    vi.mocked(composables.useQueue).mockReturnValue({
+    vi.mocked(composables.useServerQueue).mockReturnValue({
 
       add: mockAdd,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -172,7 +172,7 @@ describe('File-Based Jobs Integration', () => {
     registerJob('FailingJob', job)
 
     const mockAdd = vi.fn().mockResolvedValue({ id: 'failing-job' })
-    vi.mocked(composables.useQueue).mockReturnValue({
+    vi.mocked(composables.useServerQueue).mockReturnValue({
       add: mockAdd,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
@@ -217,7 +217,7 @@ describe('File-Based Jobs Integration', () => {
     registerJob('TypedEmailJob', job)
 
     const mockAdd = vi.fn().mockResolvedValue({ id: 'typed-job' })
-    vi.mocked(composables.useQueue).mockReturnValue({
+    vi.mocked(composables.useServerQueue).mockReturnValue({
       add: mockAdd,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
