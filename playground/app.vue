@@ -191,7 +191,7 @@
       <ol>
         <li>Make sure Redis is running on localhost:6379</li>
         <li>Start the Nuxt dev server: <code>npm run dev</code></li>
-        <li>In another terminal, start workers: <code>npx nuxt-queue worker --cwd playground</code></li>
+        <li>In another terminal, start workers: <code>npx nuxt-queuekit worker --cwd playground</code></li>
         <li>Click the buttons above to test different worker types</li>
         <li>Check your terminal to see worker event logs (onCompleted, onFailed, onProgress)</li>
       </ol>

@@ -4,11 +4,11 @@
   "description": "Background job queue for Nuxt applications powered by BullMQ and Redis",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cobraprojects/nuxt-queuekit.git"
+    "url": "git+https://github.com/cobraprojects/nuxt-queue.git"
   },
-  "homepage": "https://github.com/cobraprojects/nuxt-queuekit#readme",
+  "homepage": "https://github.com/cobraprojects/nuxt-queue#readme",
   "bugs": {
-    "url": "https://github.com/cobraprojects/nuxt-queuekit/issues"
+    "url": "https://github.com/cobraprojects/nuxt-queue/issues"
   },
   "keywords": [
     "nuxt",

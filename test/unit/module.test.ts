@@ -3,11 +3,11 @@ import { describe, it, expect } from 'vitest'
 describe('Module Configuration', () => {
   it('should have correct module metadata', () => {
     const metadata = {
-      name: 'nuxt-queue',
+      name: 'nuxt-queuekit',
       configKey: 'queue',
     }
 
-    expect(metadata.name).toBe('nuxt-queue')
+    expect(metadata.name).toBe('nuxt-queuekit')
     expect(metadata.configKey).toBe('queue')
   })
 

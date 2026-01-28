@@ -16,7 +16,7 @@ npm run dev
 
 3. In another terminal, start the workers:
 ```bash
-npx nuxt-queue worker --cwd playground
+npx nuxt-queuekit worker --cwd playground
 ```
 
 4. Open http://localhost:3000 in your browser
