@@ -1,8 +1,31 @@
 {
   "name": "nuxt-queue",
   "version": "1.0.0",
-  "description": "My new Nuxt module",
-  "repository": "your-org/my-module",
+  "description": "Background job queue for Nuxt applications powered by BullMQ and Redis",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cobraprojects/nuxt-queue.git"
+  },
+  "homepage": "https://github.com/cobraprojects/nuxt-queue#readme",
+  "bugs": {
+    "url": "https://github.com/cobraprojects/nuxt-queue/issues"
+  },
+  "keywords": [
+    "nuxt",
+    "nuxt-module",
+    "queue",
+    "job-queue",
+    "background-jobs",
+    "bullmq",
+    "redis",
+    "worker",
+    "async",
+    "task-queue"
+  ],
+  "author": {
+    "name": "Mohamed Melouk",
+    "email": "m.melouk@gmail.com"
+  },
   "license": "MIT",
   "type": "module",
   "exports": {

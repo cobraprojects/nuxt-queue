@@ -7,7 +7,6 @@
 
 Background job queue for Nuxt applications powered by BullMQ and Redis.
 
-- [✨ &nbsp;Release Notes](/CHANGELOG.md)
 <!-- - [🏀 Online playground](https://stackblitz.com/github/your-org/nuxt-queue?file=playground%2Fapp.vue) -->
 <!-- - [📖 &nbsp;Documentation](https://example.com) -->
 
