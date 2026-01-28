@@ -1,5 +1,5 @@
 export default defineNuxtConfig({
-  modules: ['nuxt-queue'],
+  modules: ['nuxt-queuekit'],
   devtools: { enabled: true },
   compatibilityDate: 'latest',
   queue: {

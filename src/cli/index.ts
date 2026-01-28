@@ -3,7 +3,7 @@ import { defineCommand, runMain } from 'citty'
 
 const main = defineCommand({
   meta: {
-    name: 'nuxt-queue',
+    name: 'nuxt-queuekit',
     version: '1.0.0',
     description: 'Nuxt Queue CLI',
   },

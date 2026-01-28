@@ -7,7 +7,7 @@
 
 Background job queue for Nuxt applications powered by BullMQ and Redis.
 
-<!-- - [🏀 Online playground](https://stackblitz.com/github/your-org/nuxt-queue?file=playground%2Fapp.vue) -->
+<!-- - [🏀 Online playground](https://stackblitz.com/github/your-org/nuxt-queuekit?file=playground%2Fapp.vue) -->
 <!-- - [📖 &nbsp;Documentation](https://example.com) -->
 
 ## Table of Contents
@@ -56,14 +56,14 @@ sudo apt-get install redis-server && sudo systemctl start redis
 Install the module:
 
 ```bash
-npm install nuxt-queue
+npm install nuxt-queuekit
 ```
 
 Add it to your `nuxt.config.ts`:
 
 ```typescript
 export default defineNuxtConfig({
-  modules: ['nuxt-queue']
+  modules: ['nuxt-queuekit']
 })
 ```
 
@@ -76,7 +76,7 @@ That's it! The module uses Redis at `127.0.0.1:6379` by default. You can [custom
 npm run dev
 
 # Terminal 2: Start the worker process
-npx nuxt-queue worker
+npx nuxt-queuekit worker
 ```
 
 You're ready to create jobs! ✨
@@ -144,7 +144,7 @@ export default defineEventHandler(async (event) => {
 The worker automatically discovers and processes all jobs in `server/jobs/`. No manual registration needed!
 
 ```bash
-npx nuxt-queue worker
+npx nuxt-queuekit worker
 ```
 
 That's the basic flow! Define → Dispatch → Process.
@@ -385,7 +385,7 @@ export default async function (job) {
 Run with:
 
 ```bash
-npx nuxt-queue worker --queue processing --worker workers/custom-processor.ts
+npx nuxt-queuekit worker --queue processing --worker workers/custom-processor.ts
 ```
 
 ### Multiple Queues Strategy
@@ -395,7 +395,7 @@ Separate jobs by priority or resource requirements:
 ```typescript
 // nuxt.config.ts
 export default defineNuxtConfig({
-  modules: ['nuxt-queue']
+  modules: ['nuxt-queuekit']
 })
 ```
 
@@ -421,13 +421,13 @@ Run dedicated workers:
 
 ```bash
 # High concurrency for critical jobs
-npx nuxt-queue worker --queue critical --concurrency 20
+npx nuxt-queuekit worker --queue critical --concurrency 20
 
 # Lower concurrency for resource-intensive jobs
-npx nuxt-queue worker --queue reports --concurrency 2
+npx nuxt-queuekit worker --queue reports --concurrency 2
 
 # Default queue
-npx nuxt-queue worker
+npx nuxt-queuekit worker
 ```
 
 ### Error Handling Patterns
@@ -544,7 +544,7 @@ Configure in `nuxt.config.ts`:
 
 ```typescript
 export default defineNuxtConfig({
-  modules: ['nuxt-queue'],
+  modules: ['nuxt-queuekit'],
   queue: {
     // Redis connection (optional if using env vars)
     redis: {
@@ -577,7 +577,7 @@ Manually register jobs through configuration. Useful for:
 
 ```typescript
 export default defineNuxtConfig({
-  modules: ['nuxt-queue'],
+  modules: ['nuxt-queuekit'],
   queue: {
     jobs: {
       // Recommended: Use file paths
@@ -621,7 +621,7 @@ npm run build
 npm run start
 
 # Start workers (Process 2+)
-npx nuxt-queue worker --concurrency 10
+npx nuxt-queuekit worker --concurrency 10
 ```
 
 ### Using Process Managers
@@ -636,8 +636,8 @@ npm install -g pm2
 pm2 start npm --name "nuxt-app" -- start
 
 # Start workers
-pm2 start "npx nuxt-queue worker --concurrency 10" --name "worker-default"
-pm2 start "npx nuxt-queue worker --queue emails --concurrency 5" --name "worker-emails"
+pm2 start "npx nuxt-queuekit worker --concurrency 10" --name "worker-default"
+pm2 start "npx nuxt-queuekit worker --queue emails --concurrency 5" --name "worker-emails"
 
 # Scale workers
 pm2 scale worker-default 3  # Run 3 instances
@@ -664,7 +664,7 @@ RUN npm ci --production
 COPY . .
 RUN npm run build
 
-CMD ["npx", "nuxt-queue", "worker", "--concurrency", "10"]
+CMD ["npx", "nuxt-queuekit", "worker", "--concurrency", "10"]
 ```
 
 ```yaml
@@ -724,7 +724,7 @@ spec:
       containers:
       - name: worker
         image: your-app:latest
-        command: ["npx", "nuxt-queue", "worker"]
+        command: ["npx", "nuxt-queuekit", "worker"]
         args: ["--concurrency", "10"]
         env:
         - name: NUXT_REDIS_HOST
@@ -743,7 +743,7 @@ spec:
 ### Worker CLI Options
 
 ```bash
-npx nuxt-queue worker [options]
+npx nuxt-queuekit worker [options]
 
 Options:
   --cwd <path>              Working directory (default: current directory)
@@ -752,9 +752,9 @@ Options:
   --concurrency <number>    Concurrent jobs (default: 5)
 
 Examples:
-  npx nuxt-queue worker
-  npx nuxt-queue worker --queue emails --concurrency 10
-  npx nuxt-queue worker --queue processing --worker ./workers/custom.ts
+  npx nuxt-queuekit worker
+  npx nuxt-queuekit worker --queue emails --concurrency 10
+  npx nuxt-queuekit worker --queue processing --worker ./workers/custom.ts
 ```
 
 ### Scaling Strategy
@@ -763,16 +763,16 @@ Different queues for different workloads:
 
 ```bash
 # High-priority, low-resource jobs (many workers)
-npx nuxt-queue worker --queue critical --concurrency 20
+npx nuxt-queuekit worker --queue critical --concurrency 20
 
 # CPU-intensive jobs (fewer workers)
-npx nuxt-queue worker --queue processing --concurrency 2
+npx nuxt-queuekit worker --queue processing --concurrency 2
 
 # I/O-bound jobs (moderate workers)
-npx nuxt-queue worker --queue emails --concurrency 10
+npx nuxt-queuekit worker --queue emails --concurrency 10
 
 # Default queue
-npx nuxt-queue worker --concurrency 5
+npx nuxt-queuekit worker --concurrency 5
 ```
 
 ## API Reference
@@ -1201,7 +1201,7 @@ Error: connect ECONNREFUSED 127.0.0.1:6379
 **Problem:** Jobs added but never processed
 
 **Solutions:**
-1. Ensure worker is running: `npx nuxt-queue worker`
+1. Ensure worker is running: `npx nuxt-queuekit worker`
 2. Check worker is listening to correct queue
 3. Verify job is added to correct queue name
 4. Check worker logs for errors
@@ -1356,7 +1356,7 @@ Worker - Reports Queue (1 instance, low concurrency)
   npm run dev
   
   # In another terminal, start workers
-  npx nuxt-queue worker --cwd playground
+  npx nuxt-queuekit worker --cwd playground
   
   # Build the playground
   npm run dev:build
@@ -1382,14 +1382,14 @@ Worker - Reports Queue (1 instance, low concurrency)
 MIT
 
 <!-- Badges -->
-[npm-version-src]: https://img.shields.io/npm/v/nuxt-queue/latest.svg?style=flat&colorA=020420&colorB=00DC82
-[npm-version-href]: https://npmjs.com/package/nuxt-queue
+[npm-version-src]: https://img.shields.io/npm/v/nuxt-queuekit/latest.svg?style=flat&colorA=020420&colorB=00DC82
+[npm-version-href]: https://npmjs.com/package/nuxt-queuekit
 
-[npm-downloads-src]: https://img.shields.io/npm/dm/nuxt-queue.svg?style=flat&colorA=020420&colorB=00DC82
-[npm-downloads-href]: https://npm.chart.dev/nuxt-queue
+[npm-downloads-src]: https://img.shields.io/npm/dm/nuxt-queuekit.svg?style=flat&colorA=020420&colorB=00DC82
+[npm-downloads-href]: https://npm.chart.dev/nuxt-queuekit
 
-[license-src]: https://img.shields.io/npm/l/nuxt-queue.svg?style=flat&colorA=020420&colorB=00DC82
-[license-href]: https://npmjs.com/package/nuxt-queue
+[license-src]: https://img.shields.io/npm/l/nuxt-queuekit.svg?style=flat&colorA=020420&colorB=00DC82
+[license-href]: https://npmjs.com/package/nuxt-queuekit
 
 [nuxt-src]: https://img.shields.io/badge/Nuxt-020420?logo=nuxt
 [nuxt-href]: https://nuxt.com

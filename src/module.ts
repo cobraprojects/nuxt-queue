@@ -25,7 +25,7 @@ interface JobDefinition {
 
 export default defineNuxtModule<ModuleOptions>({
   meta: {
-    name: 'nuxt-queue',
+    name: 'nuxt-queuekit',
     configKey: 'queue',
   },
   defaults: {
@@ -55,7 +55,7 @@ export default defineNuxtModule<ModuleOptions>({
     // Create a virtual module to provide jobs config
     nuxt.hook('nitro:config', (nitroConfig) => {
       nitroConfig.virtual = nitroConfig.virtual || {}
-      nitroConfig.virtual['#nuxt-queue-jobs'] = `export default ${JSON.stringify({})}`
+      nitroConfig.virtual['#nuxt-queuekit-jobs'] = `export default ${JSON.stringify({})}`
 
       // Store jobs in Nitro's internal options (not runtime config)
       nitroConfig.runtimeConfig = nitroConfig.runtimeConfig || {}

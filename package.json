@@ -1,14 +1,14 @@
 {
-  "name": "nuxt-queue",
+  "name": "nuxt-queuekit",
   "version": "1.0.0",
   "description": "Background job queue for Nuxt applications powered by BullMQ and Redis",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/cobraprojects/nuxt-queue.git"
+    "url": "git+https://github.com/cobraprojects/nuxt-queuekit.git"
   },
-  "homepage": "https://github.com/cobraprojects/nuxt-queue#readme",
+  "homepage": "https://github.com/cobraprojects/nuxt-queuekit#readme",
   "bugs": {
-    "url": "https://github.com/cobraprojects/nuxt-queue/issues"
+    "url": "https://github.com/cobraprojects/nuxt-queuekit/issues"
   },
   "keywords": [
     "nuxt",
@@ -38,7 +38,7 @@
     }
   },
   "bin": {
-    "nuxt-queue": "./dist/cli.mjs"
+    "nuxt-queuekit": "./dist/cli.mjs"
   },
   "main": "./dist/module.mjs",
   "typesVersions": {

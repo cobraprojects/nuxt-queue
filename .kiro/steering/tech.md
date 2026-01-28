@@ -39,7 +39,7 @@ npm run dev            # Start playground dev server
 npm run dev:build      # Build playground
 
 # Workers
-npx nuxt-queue worker  # Start worker process (separate from web server)
+npx nuxt-queuekit worker  # Start worker process (separate from web server)
 
 # Testing & Quality
 npm run test           # Run tests once
@@ -68,7 +68,7 @@ Configure via environment variables or module options:
 Configure in `nuxt.config.ts`:
 ```typescript
 export default defineNuxtConfig({
-  modules: ['nuxt-queue'],
+  modules: ['nuxt-queuekit'],
   queue: {
     redis: {
       host: '127.0.0.1',
@@ -89,14 +89,14 @@ Workers run as a **separate process** independent of the Nuxt web server:
 npm run dev
 
 # Terminal 2: Start worker process
-npx nuxt-queue worker
+npx nuxt-queuekit worker
 ```
 
 ### Worker CLI Options
 
 ```bash
-npx nuxt-queue worker --cwd <path>         # Set working directory
-npx nuxt-queue worker --concurrency <num>  # Set concurrent jobs (default: 5)
+npx nuxt-queuekit worker --cwd <path>         # Set working directory
+npx nuxt-queuekit worker --concurrency <num>  # Set concurrent jobs (default: 5)
 ```
 
 ## API Usage

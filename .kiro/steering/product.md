@@ -1,6 +1,6 @@
 # Product Overview
 
-**nuxt-queue** is a Nuxt module that provides background job queue functionality for Nuxt applications.
+**nuxt-queuekit** is a Nuxt module that provides background job queue functionality for Nuxt applications.
 
 ## Core Functionality
 
@@ -14,7 +14,7 @@
 - **Queues**: Redis-backed job queues using BullMQ
 - **Workers**: Long-running processes that consume jobs from queues
 - **Redis Integration**: Uses ioredis for Redis connection
-- **CLI**: Separate command to run workers (`npx nuxt-queue worker`)
+- **CLI**: Separate command to run workers (`npx nuxt-queuekit worker`)
 - **API**: HTTP endpoints for adding jobs and checking status
 
 ## Architecture

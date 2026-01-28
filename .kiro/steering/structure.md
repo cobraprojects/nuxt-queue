@@ -3,7 +3,7 @@
 ## Root Layout
 
 ```
-nuxt-queue/
+nuxt-queuekit/
 ├── src/                    # Module source code
 │   ├── cli/                # CLI commands
 │   ├── runtime/            # Runtime code
@@ -90,7 +90,7 @@ test/
 ### Queue & Worker Definitions
 
 - Use `useQueue(name)` to get/create a queue instance in server code
-- Workers run via CLI: `npx nuxt-queue worker`
+- Workers run via CLI: `npx nuxt-queuekit worker`
 - Default worker processes jobs on the 'default' queue
 - Workers are separate processes, not Nitro plugins
 
@@ -114,7 +114,7 @@ test/
 npm run dev
 
 # Terminal 2: Workers
-npx nuxt-queue worker
+npx nuxt-queuekit worker
 ```
 
 ### Production
@@ -124,6 +124,6 @@ npx nuxt-queue worker
 npm run build && npm run start
 
 # Process 2: Workers (can run multiple)
-npx nuxt-queue worker
-npx nuxt-queue worker --concurrency 10
+npx nuxt-queuekit worker
+npx nuxt-queuekit worker --concurrency 10
 ```
