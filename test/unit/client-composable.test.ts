@@ -3,7 +3,8 @@ import { useQueue } from '../../src/runtime/composables/useQueue'
 
 // Mock $fetch
 const mockFetch = vi.fn()
-global.$fetch = mockFetch as any
+// @ts-expect-error - Mocking global $fetch for testing
+global.$fetch = mockFetch
 
 describe('Client useQueue Composable', () => {
   beforeEach(() => {

@@ -2,7 +2,7 @@ import { defineCommand } from 'citty'
 import { consola } from 'consola'
 import { resolve } from 'pathe'
 import { loadNuxtConfig } from '@nuxt/kit'
-import { Worker, type Processor, type ConnectionOptions } from 'bullmq'
+import { Worker, type Processor, type ConnectionOptions, type Job } from 'bullmq'
 import { pathToFileURL } from 'node:url'
 
 export default defineCommand({
@@ -98,18 +98,89 @@ export default defineCommand({
         }
       }
       else {
-        // Default processor
-        processor = async (job) => {
-          consola.info(`Processing job ${job.id}: ${job.name} from queue: ${job.queueName}`)
-          consola.debug('Job data:', job.data)
+        // Try to load jobs from server/jobs directory
+        const jobsDir = resolve(cwd, 'server/jobs')
+        const jobRegistry = new Map<string, { handle: (data: unknown, job: Job) => Promise<unknown> }>()
 
-          return {
-            processed: true,
-            jobId: job.id,
-            jobName: job.name,
-            queueName: job.queueName,
-            data: job.data,
-            processedAt: new Date().toISOString(),
+        // Define a simple defineJob function for job files to use
+        const defineJobFn = <T = unknown, R = unknown>(definition: {
+          handle: (data: T, job: Job<T>) => Promise<R> | R
+          queue?: string
+          options?: Record<string, unknown>
+          onCompleted?: (job: Job<T>, result: R) => void | Promise<void>
+          onFailed?: (job: Job<T> | undefined, error: Error) => void | Promise<void>
+        }) => definition
+
+        // Make defineJob available globally for job files
+        ;(globalThis as Record<string, unknown>).defineJob = defineJobFn
+
+        try {
+          const { existsSync } = await import('node:fs')
+          const { readdir } = await import('node:fs/promises')
+
+          if (existsSync(jobsDir)) {
+            consola.info('Loading jobs from server/jobs/')
+            const files = await readdir(jobsDir)
+            const jobFiles = files.filter(file =>
+              (file.endsWith('.ts') || file.endsWith('.js') || file.endsWith('.mjs'))
+              && !file.endsWith('.d.ts'),
+            )
+
+            for (const file of jobFiles) {
+              const filePath = resolve(jobsDir, file)
+              const jobName = file.replace(/\.(ts|js|mjs)$/, '')
+
+              try {
+                const jobModule = await import(pathToFileURL(filePath).href)
+                const jobDefinition = jobModule.default
+
+                if (jobDefinition && typeof jobDefinition.handle === 'function') {
+                  jobRegistry.set(jobName, jobDefinition)
+                  consola.success(`Loaded job: ${jobName}`)
+                }
+              }
+              catch (error: unknown) {
+                const err = error as Error
+                consola.warn(`Failed to load job ${file}: ${err.message}`)
+              }
+            }
+          }
+        }
+        catch (error: unknown) {
+          const err = error as Error
+          consola.debug(`Could not load jobs directory: ${err.message}`)
+        }
+
+        // Create processor that uses job registry
+        processor = async (job) => {
+          const jobDefinition = jobRegistry.get(job.name)
+
+          if (jobDefinition) {
+            consola.info(`Processing job ${job.id}: ${job.name} from queue: ${job.queueName}`)
+
+            try {
+              const result = await jobDefinition.handle(job.data, job)
+              return result
+            }
+            catch (error: unknown) {
+              const err = error as Error
+              consola.error(`Job ${job.name} failed:`, err.message)
+              throw error
+            }
+          }
+          else {
+            // Fallback to default processor
+            consola.info(`Processing job ${job.id}: ${job.name} from queue: ${job.queueName}`)
+            consola.debug('Job data:', job.data)
+
+            return {
+              processed: true,
+              jobId: job.id,
+              jobName: job.name,
+              queueName: job.queueName,
+              data: job.data,
+              processedAt: new Date().toISOString(),
+            }
           }
         }
       }

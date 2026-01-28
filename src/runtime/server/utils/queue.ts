@@ -1,5 +1,4 @@
-import { Queue, Worker, type Job, type ConnectionOptions } from 'bullmq'
-import type { WorkerOptions, QueueOptions } from 'bullmq'
+import { Queue, Worker, type Job, type ConnectionOptions, type WorkerOptions, type QueueOptions } from 'bullmq'
 
 export interface QueueConfig {
   name: string
@@ -7,11 +6,11 @@ export interface QueueConfig {
   options?: QueueOptions
 }
 
-export interface WorkerConfig<T = any, R = any> {
+export interface WorkerConfig<T = unknown, R = unknown> {
   queueName: string
   connection: ConnectionOptions
   processor: (job: Job<T>) => Promise<R>
-  options?: WorkerOptions
+  options?: Omit<WorkerOptions, 'connection'>
 }
 
 const queues = new Map<string, Queue>()
@@ -31,9 +30,9 @@ export function createQueue(config: QueueConfig): Queue {
   return queue
 }
 
-export function createWorker<T = any, R = any>(config: WorkerConfig<T, R>): Worker {
+export function createWorker<T = unknown, R = unknown>(config: WorkerConfig<T, R>): Worker {
   const workerId = `${config.queueName}-worker`
-  
+
   if (workers.has(workerId)) {
     return workers.get(workerId)!
   }
@@ -44,7 +43,7 @@ export function createWorker<T = any, R = any>(config: WorkerConfig<T, R>): Work
     {
       connection: config.connection,
       ...config.options,
-    }
+    },
   )
 
   workers.set(workerId, worker)

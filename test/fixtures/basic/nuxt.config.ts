@@ -2,7 +2,7 @@ import MyModule from '../../../src/module'
 
 export default defineNuxtConfig({
   modules: [MyModule],
-  
+
   queue: {
     redis: {
       host: process.env.REDIS_HOST || '127.0.0.1',

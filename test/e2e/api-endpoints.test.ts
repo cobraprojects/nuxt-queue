@@ -1,14 +1,14 @@
 import { fileURLToPath } from 'node:url'
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, afterAll } from 'vitest'
 import { setup, $fetch } from '@nuxt/test-utils/e2e'
-import { Worker } from 'bullmq'
+import type { Worker } from 'bullmq'
 
 describe('API Endpoints E2E', async () => {
   await setup({
     rootDir: fileURLToPath(new URL('../fixtures/basic', import.meta.url)),
   })
 
-  let worker: Worker
+  let worker: Worker | undefined
 
   afterAll(async () => {
     await worker?.close()
@@ -16,7 +16,7 @@ describe('API Endpoints E2E', async () => {
 
   describe('POST /api/queue/add', () => {
     it('should add a job to the queue', async () => {
-      const response = await $fetch('/api/queue/add', {
+      const response = await $fetch<{ jobId: string, queueName: string }>('/api/queue/add', {
         method: 'POST',
         body: {
           queueName: 'default',
@@ -31,7 +31,7 @@ describe('API Endpoints E2E', async () => {
     })
 
     it('should add a job with options', async () => {
-      const response = await $fetch('/api/queue/add', {
+      const response = await $fetch<{ jobId: string }>('/api/queue/add', {
         method: 'POST',
         body: {
           queueName: 'default',
@@ -49,7 +49,7 @@ describe('API Endpoints E2E', async () => {
     })
 
     it('should handle custom queue names', async () => {
-      const response = await $fetch('/api/queue/add', {
+      const response = await $fetch<{ queueName: string }>('/api/queue/add', {
         method: 'POST',
         body: {
           queueName: 'custom-queue',
@@ -64,14 +64,15 @@ describe('API Endpoints E2E', async () => {
 
     it('should return error for invalid request', async () => {
       try {
-        await $fetch('/api/queue/add', {
+        await $fetch<unknown>('/api/queue/add', {
           method: 'POST',
           body: {
             // Missing required fields
           },
         })
         expect.fail('Should have thrown an error')
-      } catch (error: any) {
+      }
+      catch (error) {
         expect(error).toBeDefined()
       }
     })
@@ -80,7 +81,7 @@ describe('API Endpoints E2E', async () => {
   describe('GET /api/queue/[queueName]/[jobId]', () => {
     it('should get job status', async () => {
       // First add a job
-      const addResponse = await $fetch('/api/queue/add', {
+      const addResponse = await $fetch<{ queueName: string, jobId: string }>('/api/queue/add', {
         method: 'POST',
         body: {
           queueName: 'default',
@@ -90,8 +91,8 @@ describe('API Endpoints E2E', async () => {
       })
 
       // Then get its status
-      const statusResponse = await $fetch(
-        `/api/queue/${addResponse.queueName}/${addResponse.jobId}`
+      const statusResponse = await $fetch<{ id: string, name: string, data: unknown }>(
+        `/api/queue/${addResponse.queueName}/${addResponse.jobId}`,
       )
 
       expect(statusResponse).toBeDefined()

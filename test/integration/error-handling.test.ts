@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll, vi } from 'vitest'
-import { createQueue, createWorker, closeAll } from '../../src/runtime/server/utils/queue'
+import { createWorker, closeAll } from '../../src/runtime/server/utils/queue'
 
 vi.mock('#imports', () => ({
   useRuntimeConfig: vi.fn(() => ({
@@ -37,16 +37,17 @@ describe('Error Handling', () => {
   })
 
   it('should handle processor errors', async () => {
-    const processor = vi.fn(async (job) => {
+    const processor = vi.fn(async (_job) => {
       throw new Error('Test error')
     })
 
     expect(processor).toBeInstanceOf(Function)
-    
+
     try {
       await processor({ data: {} })
-    } catch (error: any) {
-      expect(error.message).toBe('Test error')
+    }
+    catch (error) {
+      expect((error as Error).message).toBe('Test error')
     }
   })
 })

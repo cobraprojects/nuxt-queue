@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { useQueueConnection, useQueue } from '../../src/runtime/server/utils/composables'
 import { closeAll } from '../../src/runtime/server/utils/queue'
 

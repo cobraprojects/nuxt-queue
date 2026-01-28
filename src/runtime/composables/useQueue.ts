@@ -1,7 +1,7 @@
 export function useQueue(queueName = 'default') {
   return {
-    async add(jobName: string, data: unknown, options?: unknown) {
-      return await $fetch('/api/queue/add', {
+    async add<T = unknown, R = unknown>(jobName: string, data: T, options?: unknown): Promise<R> {
+      const response = await $fetch<R>('/api/queue/add', {
         method: 'POST',
         body: {
           queueName,
@@ -10,6 +10,7 @@ export function useQueue(queueName = 'default') {
           options,
         },
       })
+      return response as R
     },
   }
 }

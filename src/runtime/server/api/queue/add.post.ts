@@ -14,10 +14,11 @@ export default defineEventHandler(async (event) => {
       jobId: job.id,
       queueName,
     }
-  } catch (error: any) {
+  }
+  catch (error) {
     throw createError({
       statusCode: 500,
-      message: error.message || 'Failed to add job to queue',
+      message: (error as Error).message || 'Failed to add job to queue',
     })
   }
 })

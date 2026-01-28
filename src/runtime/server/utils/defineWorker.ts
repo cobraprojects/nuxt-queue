@@ -1,14 +1,14 @@
-import type { Job, WorkerOptions } from 'bullmq'
+import type { Job, WorkerOptions, JobProgress } from 'bullmq'
 import { createWorker } from './queue'
 import { useQueueConnection } from './composables'
 
 export interface WorkerDefinition<T = unknown, R = unknown> {
   queueName?: string
   processor: (job: Job<T>) => Promise<R>
-  options?: WorkerOptions
+  options?: Omit<WorkerOptions, 'connection'>
   onCompleted?: (job: Job<T>, result: R) => void | Promise<void>
   onFailed?: (job: Job<T> | undefined, error: Error) => void | Promise<void>
-  onProgress?: (job: Job<T>, progress: number | object) => void | Promise<void>
+  onProgress?: (job: Job<T>, progress: JobProgress) => void | Promise<void>
 }
 
 export function defineWorker<T = unknown, R = unknown>(definition: WorkerDefinition<T, R>) {
@@ -32,7 +32,7 @@ export function defineWorker<T = unknown, R = unknown>(definition: WorkerDefinit
     }
 
     if (definition.onProgress) {
-      worker.on('progress', definition.onProgress as (job: Job, progress: number | object) => void)
+      worker.on('progress', definition.onProgress)
     }
 
     return worker

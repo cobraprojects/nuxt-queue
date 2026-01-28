@@ -24,13 +24,15 @@ describe('Queue Performance', () => {
       connection: { host: '127.0.0.1', port: 6379 },
     })
 
-    const processor = vi.fn(async (job) => ({ processed: true }))
-    
+    const processor = vi.fn(async _job => ({ processed: true }))
+
     const worker = createWorker({
       queueName: 'performance-test',
       connection: { host: '127.0.0.1', port: 6379 },
       processor,
-      options: { concurrency: 10 },
+      options: {
+        concurrency: 10,
+      },
     })
 
     expect(queue).toBeDefined()

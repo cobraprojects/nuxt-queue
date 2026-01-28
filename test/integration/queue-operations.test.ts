@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
+import { describe, it, expect, afterAll, vi } from 'vitest'
 import { createQueue, createWorker, closeAll } from '../../src/runtime/server/utils/queue'
 
 vi.mock('#imports', () => ({
@@ -29,8 +29,8 @@ describe('Queue Operations Integration', () => {
   })
 
   it('should create a worker', async () => {
-    const processor = vi.fn(async (job) => ({ processed: true }))
-    
+    const processor = vi.fn(async _job => ({ processed: true }))
+
     const worker = createWorker({
       queueName: 'test-integration',
       connection: { host: '127.0.0.1', port: 6379 },

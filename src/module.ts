@@ -1,4 +1,4 @@
-import { defineNuxtModule, addPlugin, createResolver, addServerImportsDir, addServerHandler, addImportsDir } from '@nuxt/kit'
+import { defineNuxtModule, addPlugin, createResolver, addServerImportsDir, addServerHandler, addImportsDir, addServerPlugin } from '@nuxt/kit'
 import { defu } from 'defu'
 
 export interface RedisConfig {
@@ -54,5 +54,8 @@ export default defineNuxtModule<ModuleOptions>({
 
     // Add plugin
     addPlugin(resolver.resolve('./runtime/plugin'))
+
+    // Add job loader plugin (auto-discovers jobs from server/jobs/)
+    addServerPlugin(resolver.resolve('./runtime/server/plugins/job-loader'))
   },
 })

@@ -29,7 +29,7 @@ describe('Job Lifecycle', () => {
   })
 
   it('should create worker for job processing', () => {
-    const processor = vi.fn(async (job) => {
+    const processor = vi.fn(async (_job) => {
       return { processed: true }
     })
 
