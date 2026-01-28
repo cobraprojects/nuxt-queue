@@ -9,7 +9,13 @@
     ".": {
       "types": "./dist/types.d.mts",
       "import": "./dist/module.mjs"
+    },
+    "./cli": {
+      "import": "./dist/cli.mjs"
     }
+  },
+  "bin": {
+    "nuxt-queue": "./dist/cli.mjs"
   },
   "main": "./dist/module.mjs",
   "typesVersions": {
@@ -34,10 +40,20 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit"
+    "test:types": "vue-tsc --noEmit && cd playground && vue-tsc --noEmit",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "test:e2e": "vitest run test/e2e",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@nuxt/kit": "^4.3.0"
+    "@nuxt/kit": "^4.3.0",
+    "bullmq": "^5.28.3",
+    "citty": "^0.2.0",
+    "consola": "^3.4.2",
+    "defu": "^6.1.4",
+    "ioredis": "^5.4.2",
+    "pathe": "^2.0.3"
   },
   "devDependencies": {
     "@nuxt/devtools": "^3.1.1",
