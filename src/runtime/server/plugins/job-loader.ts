@@ -72,24 +72,11 @@ export default defineNitroPlugin((_nitroApp) => {
     const nitroConfig = useRuntimeConfig()
     const configuredJobs = (nitroConfig as { nuxtQueue?: { configJobs?: Record<string, JobDefinition> } }).nuxtQueue?.configJobs || {}
 
-    // In development, Nitro runs from the project root, but we need to look in the app's server directory
-    // Try multiple possible locations
-    const possibleDirs = [
-      resolve(process.cwd(), configuredJobsDir),
-      resolve(process.cwd(), 'playground', configuredJobsDir),
-    ]
+    // Resolve the jobs directory
+    const jobsDir = resolve(process.cwd(), configuredJobsDir)
 
-    let jobsDir: string | null = null
-    for (const dir of possibleDirs) {
-      if (existsSync(dir)) {
-        jobsDir = dir
-        break
-      }
-    }
-
-    if (!jobsDir) {
-      consola.warn('⚠️  No jobs directory found in any expected location')
-      consola.debug('Searched locations:', possibleDirs)
+    if (!existsSync(jobsDir)) {
+      // Silently return if no jobs directory found - this is normal for apps without background jobs
       return
     }
 
