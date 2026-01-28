@@ -31,3 +31,10 @@ export function getAllJobs(): Map<string, JobDefinition<any, any>> {
 export function hasJob(name: string): boolean {
   return jobRegistry.has(name)
 }
+
+/**
+ * Clear all registered jobs (for testing)
+ */
+export function clearJobs(): void {
+  jobRegistry.clear()
+}

@@ -4,31 +4,31 @@
     <p>Test the queue system with different worker types</p>
 
     <div style="display: grid; gap: 1rem; margin-top: 2rem;">
-      <!-- Laravel-Style Jobs Section -->
+      <!-- File-Based Jobs Section -->
       <div style="border: 2px solid #4CAF50; padding: 1rem; border-radius: 8px; background: #f0fff0;">
-        <h2>🎯 Laravel-Style Jobs (New!)</h2>
-        <p>Test the new Laravel-like job dispatch system with auto-discovery</p>
+        <h2>🎯 File-Based Jobs (New!)</h2>
+        <p>Test the new file-based job dispatch system with auto-discovery</p>
 
         <div style="display: grid; gap: 1rem; margin-top: 1rem;">
           <!-- Send Email Job -->
           <div style="background: white; padding: 1rem; border-radius: 4px;">
             <h3>📧 Send Email Job</h3>
             <button
-              :disabled="loading.laravelEmail"
+              :disabled="loading.fileBasedEmail"
               style="padding: 0.5rem 1rem; cursor: pointer;"
               @click="dispatchEmailJob"
             >
-              {{ loading.laravelEmail ? 'Dispatching...' : 'Dispatch SendEmailJob' }}
+              {{ loading.fileBasedEmail ? 'Dispatching...' : 'Dispatch SendEmailJob' }}
             </button>
             <div
-              v-if="results.laravelEmail"
+              v-if="results.fileBasedEmail"
               style="margin-top: 1rem;"
             >
-              <pre style="background: #f5f5f5; padding: 1rem; border-radius: 4px; overflow-x: auto;">{{ results.laravelEmail }}</pre>
+              <pre style="background: #f5f5f5; padding: 1rem; border-radius: 4px; overflow-x: auto;">{{ results.fileBasedEmail }}</pre>
               <button
-                :disabled="!results.laravelEmail?.jobId"
+                :disabled="!results.fileBasedEmail?.jobId"
                 style="margin-top: 0.5rem; padding: 0.5rem 1rem; cursor: pointer;"
-                @click="checkStatus(results.laravelEmail?.queueName || 'default', results.laravelEmail?.jobId || '')"
+                @click="checkStatus(results.fileBasedEmail?.queueName || 'default', results.fileBasedEmail?.jobId || '')"
               >
                 Check Status
               </button>
@@ -39,21 +39,21 @@
           <div style="background: white; padding: 1rem; border-radius: 4px;">
             <h3>⚙️ Process Data Job</h3>
             <button
-              :disabled="loading.laravelData"
+              :disabled="loading.fileBasedData"
               style="padding: 0.5rem 1rem; cursor: pointer;"
               @click="dispatchDataJob"
             >
-              {{ loading.laravelData ? 'Dispatching...' : 'Dispatch ProcessDataJob' }}
+              {{ loading.fileBasedData ? 'Dispatching...' : 'Dispatch ProcessDataJob' }}
             </button>
             <div
-              v-if="results.laravelData"
+              v-if="results.fileBasedData"
               style="margin-top: 1rem;"
             >
-              <pre style="background: #f5f5f5; padding: 1rem; border-radius: 4px; overflow-x: auto;">{{ results.laravelData }}</pre>
+              <pre style="background: #f5f5f5; padding: 1rem; border-radius: 4px; overflow-x: auto;">{{ results.fileBasedData }}</pre>
               <button
-                :disabled="!results.laravelData?.jobId"
+                :disabled="!results.fileBasedData?.jobId"
                 style="margin-top: 0.5rem; padding: 0.5rem 1rem; cursor: pointer;"
-                @click="checkStatus(results.laravelData?.queueName || 'default', results.laravelData?.jobId || '')"
+                @click="checkStatus(results.fileBasedData?.queueName || 'default', results.fileBasedData?.jobId || '')"
               >
                 Check Status
               </button>
@@ -211,16 +211,16 @@ const loading = ref({
   email: false,
   notification: false,
   dataProcessing: false,
-  laravelEmail: false,
-  laravelData: false,
+  fileBasedEmail: false,
+  fileBasedData: false,
 })
 
 const results = ref<Record<string, { jobId?: string, error?: string, success?: boolean, queueName?: string, message?: string, itemCount?: number } | null>>({
   email: null,
   notification: null,
   dataProcessing: null,
-  laravelEmail: null,
-  laravelData: null,
+  fileBasedEmail: null,
+  fileBasedData: null,
 })
 
 const jobStatus = ref<{
@@ -307,28 +307,28 @@ async function checkStatus(queueName: string, jobId: string) {
 }
 
 async function dispatchEmailJob() {
-  loading.value.laravelEmail = true
+  loading.value.fileBasedEmail = true
   try {
     const response = await $fetch('/api/dispatch-email', {
       method: 'POST',
       body: {
         to: 'test@example.com',
-        subject: 'Laravel-Style Job Test',
-        body: 'This email was sent using the new Laravel-style job system!',
+        subject: 'File-Based Job Test',
+        body: 'This email was sent using the new file-based job system!',
       },
     })
-    results.value.laravelEmail = response
+    results.value.fileBasedEmail = response
   }
   catch (err) {
-    results.value.laravelEmail = { error: (err as Error).message }
+    results.value.fileBasedEmail = { error: (err as Error).message }
   }
   finally {
-    loading.value.laravelEmail = false
+    loading.value.fileBasedEmail = false
   }
 }
 
 async function dispatchDataJob() {
-  loading.value.laravelData = true
+  loading.value.fileBasedData = true
   try {
     const response = await $fetch('/api/dispatch-data', {
       method: 'POST',
@@ -338,13 +338,13 @@ async function dispatchDataJob() {
         data: { items: 100 },
       },
     })
-    results.value.laravelData = response
+    results.value.fileBasedData = response
   }
   catch (err) {
-    results.value.laravelData = { error: (err as Error).message }
+    results.value.fileBasedData = { error: (err as Error).message }
   }
   finally {
-    loading.value.laravelData = false
+    loading.value.fileBasedData = false
   }
 }
 </script>

@@ -1,5 +1,3 @@
-import { dispatch } from '../../../src/runtime/server/utils/dispatch'
-
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
 

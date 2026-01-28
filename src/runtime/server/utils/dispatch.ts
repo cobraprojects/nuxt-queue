@@ -7,7 +7,7 @@ export interface DispatchOptions extends Omit<JobsOptions, 'jobId'> {
 }
 
 /**
- * Dispatch a job by name (Laravel-like API)
+ * Dispatch a job by name (File-Based Jobs API)
  *
  * @example
  * ```typescript

@@ -38,7 +38,7 @@ export interface JobDefinition<T = unknown, R = unknown> {
 }
 
 /**
- * Define a job class for Laravel-like job handling
+ * Define a job class for file-based job handling
  */
 export function defineJob<T = unknown, R = unknown>(definition: JobDefinition<T, R>) {
   return definition

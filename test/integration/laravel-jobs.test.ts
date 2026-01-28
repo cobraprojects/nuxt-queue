@@ -10,7 +10,7 @@ vi.mock('../../src/runtime/server/utils/composables', () => ({
   useQueueConnection: vi.fn(),
 }))
 
-describe('Laravel-style Jobs Integration', () => {
+describe('File-Based Jobs Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getAllJobs().clear()

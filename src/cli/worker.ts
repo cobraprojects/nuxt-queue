@@ -77,6 +77,11 @@ export default defineCommand({
       })
 
       let processor: Processor
+      const jobRegistry = new Map<string, {
+        handle: (data: unknown, job: Job) => Promise<unknown>
+        onCompleted?: (job: Job, result: unknown) => void | Promise<void>
+        onFailed?: (job: Job | undefined, error: Error) => void | Promise<void>
+      }>()
 
       // Load custom worker if provided
       if (args.worker) {
@@ -100,7 +105,6 @@ export default defineCommand({
       else {
         // Try to load jobs from server/jobs directory
         const jobsDir = resolve(cwd, 'server/jobs')
-        const jobRegistry = new Map<string, { handle: (data: unknown, job: Job) => Promise<unknown> }>()
 
         // Define a simple defineJob function for job files to use
         const defineJobFn = <T = unknown, R = unknown>(definition: {
@@ -114,34 +118,72 @@ export default defineCommand({
         // Make defineJob available globally for job files
         ;(globalThis as Record<string, unknown>).defineJob = defineJobFn
 
+        /**
+         * Recursively scan directory for job files
+         */
+        async function scanJobFiles(dir: string, baseDir: string): Promise<Array<{ path: string, name: string }>> {
+          const results: Array<{ path: string, name: string }> = []
+
+          try {
+            const { readdirSync, statSync } = await import('node:fs')
+            const { relative } = await import('pathe')
+            const entries = readdirSync(dir)
+
+            for (const entry of entries) {
+              const fullPath = resolve(dir, entry)
+              const stat = statSync(fullPath)
+
+              if (stat.isDirectory()) {
+                // Recursively scan subdirectories
+                const subResults = await scanJobFiles(fullPath, baseDir)
+                results.push(...subResults)
+              }
+              else if (stat.isFile()) {
+                // Check if it's a valid job file
+                if ((entry.endsWith('.ts') || entry.endsWith('.js') || entry.endsWith('.mjs'))
+                  && !entry.endsWith('.d.ts')) {
+                  // Get relative path from base directory and use it as job name
+                  const relativePath = relative(baseDir, fullPath)
+                  const jobName = relativePath.replace(/\.(ts|js|mjs)$/, '').replace(/\//g, '.')
+
+                  results.push({
+                    path: fullPath,
+                    name: jobName,
+                  })
+                }
+              }
+            }
+          }
+          catch (error: unknown) {
+            const err = error as Error
+            consola.error(`Failed to scan directory ${dir}:`, err.message)
+          }
+
+          return results
+        }
+
         try {
           const { existsSync } = await import('node:fs')
-          const { readdir } = await import('node:fs/promises')
 
           if (existsSync(jobsDir)) {
             consola.info('Loading jobs from server/jobs/')
-            const files = await readdir(jobsDir)
-            const jobFiles = files.filter(file =>
-              (file.endsWith('.ts') || file.endsWith('.js') || file.endsWith('.mjs'))
-              && !file.endsWith('.d.ts'),
-            )
+            const jobFiles = await scanJobFiles(jobsDir, jobsDir)
 
-            for (const file of jobFiles) {
-              const filePath = resolve(jobsDir, file)
-              const jobName = file.replace(/\.(ts|js|mjs)$/, '')
+            consola.info(`📂 Found ${jobFiles.length} job file(s)`)
 
+            for (const { path: filePath, name: jobName } of jobFiles) {
               try {
                 const jobModule = await import(pathToFileURL(filePath).href)
                 const jobDefinition = jobModule.default
 
                 if (jobDefinition && typeof jobDefinition.handle === 'function') {
                   jobRegistry.set(jobName, jobDefinition)
-                  consola.success(`Loaded job: ${jobName}`)
+                  consola.success(`✅ Loaded job: ${jobName}`)
                 }
               }
               catch (error: unknown) {
                 const err = error as Error
-                consola.warn(`Failed to load job ${file}: ${err.message}`)
+                consola.warn(`Failed to load job ${jobName}: ${err.message}`)
               }
             }
           }
@@ -164,7 +206,7 @@ export default defineCommand({
             }
             catch (error: unknown) {
               const err = error as Error
-              consola.error(`Job ${job.name} failed:`, err.message)
+              consola.error(`Job ${job.name} failed (attempt ${job.attemptsMade}/${job.opts.attempts || 1}):`, err.message)
               throw error
             }
           }
@@ -205,12 +247,43 @@ export default defineCommand({
           },
         )
 
-        worker.on('completed', (job) => {
+        worker.on('completed', async (job) => {
           consola.success(`[${queueName}] Job ${job.id} completed`)
+
+          // Call job's onCompleted hook if defined
+          const jobDefinition = jobRegistry.get(job.name)
+          if (jobDefinition?.onCompleted) {
+            try {
+              await jobDefinition.onCompleted(job, job.returnvalue)
+            }
+            catch (error: unknown) {
+              const err = error as Error
+              consola.warn(`onCompleted hook failed for job ${job.name}:`, err.message)
+            }
+          }
         })
 
-        worker.on('failed', (job, err) => {
+        worker.on('failed', async (job, err) => {
           consola.error(`[${queueName}] Job ${job?.id} failed:`, err.message)
+
+          // Call job's onFailed hook only after all retries are exhausted
+          if (job) {
+            const maxAttempts = job.opts.attempts || 1
+            const isLastAttempt = job.attemptsMade >= maxAttempts
+
+            if (isLastAttempt) {
+              const jobDefinition = jobRegistry.get(job.name)
+              if (jobDefinition?.onFailed) {
+                try {
+                  await jobDefinition.onFailed(job, err)
+                }
+                catch (error: unknown) {
+                  const hookErr = error as Error
+                  consola.warn(`onFailed hook failed for job ${job.name}:`, hookErr.message)
+                }
+              }
+            }
+          }
         })
 
         worker.on('error', (err) => {

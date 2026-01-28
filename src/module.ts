@@ -11,6 +11,16 @@ export interface RedisConfig {
 
 export interface ModuleOptions {
   redis?: RedisConfig
+  jobsDir?: string
+  jobs?: Record<string, string | JobDefinition> // Can be file path or inline definition
+}
+
+interface JobDefinition {
+  handle: (data: unknown, job: unknown) => Promise<unknown> | unknown
+  queue?: string
+  options?: Record<string, unknown>
+  onCompleted?: (job: unknown, result: unknown) => void | Promise<void>
+  onFailed?: (job: unknown, error: Error) => void | Promise<void>
 }
 
 export default defineNuxtModule<ModuleOptions>({
@@ -26,13 +36,31 @@ export default defineNuxtModule<ModuleOptions>({
       username: process.env.NUXT_REDIS_USERNAME || undefined,
       db: Number(process.env.NUXT_REDIS_DB || 0),
     },
+    jobsDir: 'server/jobs',
+    jobs: {},
   },
   async setup(options, nuxt) {
     const resolver = createResolver(import.meta.url)
 
-    // Add runtime config
+    // Add runtime config (only serializable values)
     nuxt.options.runtimeConfig.queue = defu(nuxt.options.runtimeConfig.queue, {
       redis: options.redis,
+      jobsDir: options.jobsDir,
+    })
+
+    // Store jobs config in a way that won't trigger serialization warnings
+    // We'll make it available through a virtual module instead of runtime config
+    const jobsConfig = options.jobs || {}
+
+    // Create a virtual module to provide jobs config
+    nuxt.hook('nitro:config', (nitroConfig) => {
+      nitroConfig.virtual = nitroConfig.virtual || {}
+      nitroConfig.virtual['#nuxt-queue-jobs'] = `export default ${JSON.stringify({})}`
+
+      // Store jobs in Nitro's internal options (not runtime config)
+      nitroConfig.runtimeConfig = nitroConfig.runtimeConfig || {}
+      nitroConfig.runtimeConfig.nuxtQueue = nitroConfig.runtimeConfig.nuxtQueue || {}
+      nitroConfig.runtimeConfig.nuxtQueue.configJobs = jobsConfig
     })
 
     // Add server utilities
