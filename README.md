@@ -22,6 +22,7 @@ Background job queue for Nuxt applications powered by BullMQ and Redis.
 - [Examples](#examples)
 - [Troubleshooting](#troubleshooting)
 - [Architecture](#architecture)
+- [Roadmap](#roadmap)
 
 ## Features
 
@@ -1344,9 +1345,35 @@ Worker - Reports Queue (1 instance, low concurrency)
 
 ## Requirements
 
-- **Node.js** 18 or higher
+- **Node.js** 20 or higher
 - **Redis** 6 or higher
 - **Nuxt** 3 or higher
+
+## Roadmap
+
+We're actively working on exciting new features:
+
+### 🔄 Multiple Queue Drivers
+Support for additional storage backends beyond Redis:
+- **Memory Driver** - In-memory queue for development and testing
+- **Database Driver** - PostgreSQL, MySQL, SQLite support for persistent queues without Redis
+
+### ⏰ Job Scheduling
+Built-in cron job scheduling capabilities:
+- Schedule recurring jobs with cron expressions
+- Delayed job execution
+- Timezone-aware scheduling
+- Job calendar management
+
+### 📊 Management UI
+Visual dashboard for queue monitoring and management:
+- **Flow Diagrams** - Visualize job dependencies and workflows
+- **Timeline View** - Track job execution history and patterns
+- **Job Scheduler** - Visual cron job configuration
+- **Real-time Monitoring** - Live queue stats and job progress
+- **Job Management** - Retry, cancel, and inspect jobs from the UI
+
+Want to contribute or suggest features? [Open an issue](https://github.com/cobraprojects/nuxt-queuekit/issues)!
 
 ## Contribution
 
