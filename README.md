@@ -53,13 +53,21 @@ sudo apt-get install redis-server && sudo systemctl start redis
 
 ### Installation
 
-Install the module:
+Install the module using Nuxi:
+
+```bash
+npx nuxi@latest module add nuxt-queuekit
+```
+
+This will automatically install the package and add it to your `nuxt.config.ts`.
+
+Alternatively, install manually:
 
 ```bash
 npm install nuxt-queuekit
 ```
 
-Add it to your `nuxt.config.ts`:
+Then add it to your `nuxt.config.ts`:
 
 ```typescript
 export default defineNuxtConfig({
