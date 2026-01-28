@@ -1,4 +1,4 @@
-import { ref, onUnmounted, type Ref } from 'vue'
+import { ref, onUnmounted, getCurrentInstance, type Ref } from 'vue'
 
 export interface JobResponse<R = unknown> {
   jobId: string
@@ -17,17 +17,12 @@ export function useQueue(queueName = 'default') {
   const eventSources = new Set<EventSource>()
 
   // Cleanup all event sources when component unmounts (only in component context)
-  try {
-    if (typeof onUnmounted !== 'undefined') {
-      onUnmounted(() => {
-        eventSources.forEach(es => es.close())
-        eventSources.clear()
-      })
-    }
-  }
-  catch {
-    // onUnmounted not available (e.g., in tests or non-component context)
-    // Event sources will still be cleaned up on completion/error
+  // Check if we're inside a component before calling onUnmounted
+  if (getCurrentInstance()) {
+    onUnmounted(() => {
+      eventSources.forEach(es => es.close())
+      eventSources.clear()
+    })
   }
 
   return {
