@@ -18,7 +18,7 @@ describe('Error Handling', () => {
     await closeAll()
   })
 
-  it('should create worker with error handling processor', () => {
+  it('should create worker with error handling processor', async () => {
     const processor = vi.fn(async (job) => {
       if (!job.data.valid) {
         throw new Error('Processing failed')
@@ -34,6 +34,9 @@ describe('Error Handling', () => {
 
     expect(worker).toBeDefined()
     expect(processor).toBeInstanceOf(Function)
+
+    // Properly close the worker to prevent unhandled connection errors
+    await worker.close()
   })
 
   it('should handle processor errors', async () => {
