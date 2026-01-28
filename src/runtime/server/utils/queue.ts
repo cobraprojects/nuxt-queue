@@ -59,10 +59,45 @@ export function getWorker(queueName: string): Worker | undefined {
 }
 
 export async function closeAll() {
-  await Promise.all([
-    ...Array.from(queues.values()).map(q => q.close()),
-    ...Array.from(workers.values()).map(w => w.close()),
-  ])
+  if (queues.size === 0 && workers.size === 0) {
+    return
+  }
+
+  const closePromises = []
+
+  // Close all queues
+  for (const queue of queues.values()) {
+    try {
+      const client = await queue.client
+      const status = client.status
+      // Only close/disconnect if connection was actually initiated
+      if (status === 'ready' || status === 'connecting' || status === 'reconnecting') {
+        closePromises.push(queue.close())
+      }
+      // For 'wait' or 'end' status, just skip - connection was never opened
+    }
+    catch {
+      // Ignore errors during cleanup
+    }
+  }
+
+  // Close all workers
+  for (const worker of workers.values()) {
+    try {
+      const client = await worker.client
+      const status = client.status
+      // Only close/disconnect if connection was actually initiated
+      if (status === 'ready' || status === 'connecting' || status === 'reconnecting') {
+        closePromises.push(worker.close())
+      }
+      // For 'wait' or 'end' status, just skip - connection was never opened
+    }
+    catch {
+      // Ignore errors during cleanup
+    }
+  }
+
+  await Promise.allSettled(closePromises)
   queues.clear()
   workers.clear()
 }

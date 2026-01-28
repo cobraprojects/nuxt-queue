@@ -20,8 +20,17 @@ export function useQueueConnection(): ConnectionOptions {
     db: queueConfig.redis?.db || 0,
     // Fail fast if Redis is not available
     connectTimeout: 2000,
-    maxRetriesPerRequest: 0,
+    commandTimeout: 2000,
+    maxRetriesPerRequest: null,
     enableReadyCheck: false,
+    lazyConnect: true,
+    retryStrategy: (times: number) => {
+      // Stop retrying after 2 attempts
+      if (times > 2) {
+        return null
+      }
+      return Math.min(times * 100, 1000)
+    },
   }
 
   return connectionConfig

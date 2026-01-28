@@ -19,11 +19,6 @@ export default defineConfig({
     },
     testTimeout: 30000,
     hookTimeout: 30000,
-    onConsoleLog(log) {
-      // Suppress Redis connection errors in test output
-      if (log.includes('ReplyError') || log.includes('[request error]')) {
-        return false
-      }
-    },
+    teardownTimeout: 10000,
   },
 })
