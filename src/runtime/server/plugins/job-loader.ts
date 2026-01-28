@@ -55,7 +55,7 @@ async function scanJobFiles(dir: string, baseDir: string): Promise<Array<{ path:
 /**
  * Auto-discover and register jobs from server/jobs/ directory
  */
-export default defineNitroPlugin((_nitroApp) => {
+export default defineNitroPlugin((nitroApp) => {
   // Make defineJob available globally for job files immediately (synchronous)
   ;(globalThis as Record<string, unknown>).defineJob = defineJob
 
@@ -73,10 +73,15 @@ export default defineNitroPlugin((_nitroApp) => {
     const configuredJobs = (nitroConfig as { nuxtQueue?: { configJobs?: Record<string, JobDefinition> } }).nuxtQueue?.configJobs || {}
 
     // Resolve the jobs directory
-    const jobsDir = resolve(process.cwd(), configuredJobsDir)
+    // Try to use Nitro's rootDir if available, otherwise fall back to process.cwd()
+    const baseDir = (nitroApp as { options?: { rootDir?: string } })?.options?.rootDir || process.cwd()
+    const jobsDir = configuredJobsDir.startsWith('/')
+      ? configuredJobsDir
+      : resolve(baseDir, configuredJobsDir)
 
     if (!existsSync(jobsDir)) {
       // Silently return if no jobs directory found - this is normal for apps without background jobs
+      consola.debug(`Jobs directory not found: ${jobsDir}`)
       return
     }
 

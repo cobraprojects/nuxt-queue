@@ -18,6 +18,10 @@ export function useQueueConnection(): ConnectionOptions {
     password: queueConfig.redis?.password || undefined,
     username: queueConfig.redis?.username || undefined,
     db: queueConfig.redis?.db || 0,
+    // Fail fast if Redis is not available
+    connectTimeout: 2000,
+    maxRetriesPerRequest: 0,
+    enableReadyCheck: false,
   }
 
   return connectionConfig

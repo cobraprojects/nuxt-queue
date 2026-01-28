@@ -26,13 +26,16 @@ describe('Server Composables', () => {
     it('should return connection config from runtime config', () => {
       const connection = useQueueConnection()
 
-      expect(connection).toEqual({
+      expect(connection).toMatchObject({
         host: 'test-host',
         port: 1234,
         password: 'test-password',
         username: 'test-user',
         db: 5,
       })
+      // Connection timeout settings should be present
+      expect(connection).toHaveProperty('connectTimeout')
+      expect(connection).toHaveProperty('maxRetriesPerRequest')
     })
 
     it('should cache connection config', () => {
