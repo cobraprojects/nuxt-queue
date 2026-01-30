@@ -94,7 +94,7 @@ You're ready to create jobs! ✨
 
 ## Basic Usage
 
-Nuxt Queue uses a **file-based approach** where you define job classes and dispatch them by name. The module handles auto-discovery and worker registration automatically.
+Nuxt Queue uses a **file-based approach** where you define job classes and dispatch them by name.
 
 ### Step 1: Create a Job
 
@@ -129,36 +129,41 @@ export default defineJob<WelcomeEmailData>({
 
 ### Step 2: Dispatch the Job
 
-From any server-side code (API routes, plugins, etc.):
+Use `dispatch()` anywhere in your app - API routes, plugins, middleware, etc:
 
 ```typescript
 // server/api/register.post.ts
 export default defineEventHandler(async (event) => {
   const { email, name } = await readBody(event)
   
-  // Create user in database
+  // Create user
   const user = await createUser({ email, name })
   
-  // Dispatch welcome email job
-  await dispatch('SendWelcomeEmail', {
+  // Dispatch job - returns reactive refs with real-time updates
+  const { jobId, progress, status, result } = await dispatch('SendWelcomeEmail', {
     userId: user.id,
     email: user.email,
     name: user.name
   })
   
-  return { success: true }
+  // Optionally watch progress
+  watch(progress, (value) => {
+    console.log(`Email job progress: ${value}%`)
+  })
+  
+  return { success: true, jobId }
 })
 ```
 
 ### Step 3: Worker Processes It
 
-The worker automatically discovers and processes all jobs in `server/jobs/`. No manual registration needed!
+The worker automatically discovers and processes all jobs in `server/jobs/`:
 
 ```bash
 npx nuxt-queuekit worker
 ```
 
-That's the basic flow! Define → Dispatch → Process.
+That's it! Define → Dispatch → Process.
 
 ### Organizing Jobs in Subdirectories
 
@@ -244,14 +249,32 @@ export default defineJob({
 
 ### Checking Job Status
 
-Get job status using the built-in API:
+Both `dispatch()` and `useQueue().add()` return the same reactive response:
 
 ```typescript
-// Dispatch and get job ID
-const result = await dispatch('GenerateReport', { userId: '123' })
+const { 
+  jobId,        // string - Job ID
+  queueName,    // string - Queue name
+  progress,     // Ref<number> - Progress 0-100 (updates in real-time)
+  status,       // Ref<'waiting' | 'active' | 'completed' | 'failed' | 'delayed'>
+  result,       // Ref<R | null> - Job result when completed
+  error,        // Ref<string | null> - Error message if failed
+  refresh       // () => Promise<void> - Manually refresh status
+} = await dispatch('GenerateReport', { userId: '123' })
 
-// Check status
-const status = await $fetch(`/api/queue/default/${result.jobId}`)
+// Watch real-time updates
+watch(status, (value) => {
+  console.log(`Status: ${value}`)
+  if (value === 'completed') {
+    console.log('Result:', result.value)
+  }
+})
+```
+
+You can also check status via the API endpoint:
+
+```typescript
+const status = await $fetch(`/api/queue/${queueName}/${jobId}`)
 console.log(status.state)      // 'waiting' | 'active' | 'completed' | 'failed'
 console.log(status.progress)   // 0-100
 console.log(status.returnvalue) // Job result
@@ -259,76 +282,54 @@ console.log(status.returnvalue) // Job result
 
 ## Advanced Usage
 
-### When to Use Direct Queue API
+### `useQueue()` vs `dispatch()`
 
-The file-based approach covers most use cases, but use the Direct Queue API when you need:
+Both APIs return the same reactive `JobResponse` with real-time updates. Choose based on your use case:
 
-- **Dynamic job names** - Job names determined at runtime
-- **Direct BullMQ features** - Advanced BullMQ options not exposed by `defineJob`
-- **Client-side job dispatch** - Adding jobs from Vue components
-- **Custom worker logic** - Full control over job processing
+**Use `dispatch()` when:**
+- ✅ Quick one-off job dispatching
+- ✅ Server-side API routes and handlers
+- ✅ You don't need to reuse the queue instance
 
-### Client-Side Job Dispatch
+**Use `useQueue()` when:**
+- ✅ Dispatching multiple jobs to the same queue
+- ✅ Client-side Vue components (automatic cleanup on unmount)
+- ✅ You want a reusable composable pattern
 
-Use the `useQueue` composable in Vue components:
+```typescript
+// dispatch() - Quick and simple
+await dispatch('SendEmail', { to: 'user@example.com' })
 
-```vue
-<script setup>
-const queue = useQueue()
+// useQueue() - Reusable instance
+const queue = useQueue('emails')
+await queue.add('SendEmail', { to: 'user1@example.com' })
+await queue.add('SendEmail', { to: 'user2@example.com' })
+await queue.add('SendEmail', { to: 'user3@example.com' })
+```
 
-async function exportData() {
-  await queue.add('export-user-data', {
-    userId: user.value.id,
-    email: user.value.email,
-    format: 'csv'
-  })
-  
-  // Show confirmation
-  toast.success('Export started! You\'ll receive an email when it\'s ready.')
-}
-</script>
+Both return identical `JobResponse` objects with reactive refs:
+
+```typescript
+const { jobId, progress, status, result, error, refresh } = await dispatch('ProcessData', data)
+// OR
+const { jobId, progress, status, result, error, refresh } = await queue.add('ProcessData', data)
+
+// Watch real-time updates
+watch(progress, (val) => console.log(`Progress: ${val}%`))
+watch(status, (val) => {
+  if (val === 'completed') console.log('Done!', result.value)
+})
 ```
 
 ### Real-time Job Monitoring
 
-Get live progress updates with zero configuration using Server-Sent Events (SSE):
-
-```vue
-<script setup>
-const queue = useQueue()
-
-async function processData() {
-  // One-liner - returns reactive refs that update automatically
-  const { progress, status, result, error } = await queue.add('ProcessData', {
-    userId: user.value.id,
-    items: 1000
-  })
-  
-  // Watch progress in real-time (<100ms latency)
-  watch(progress, (value) => {
-    console.log(`Progress: ${value}%`)
-  })
-  
-  // React to completion
-  watch(status, (value) => {
-    if (value === 'completed') {
-      toast.success('Processing complete!')
-      console.log('Result:', result.value)
-    }
-    if (value === 'failed') {
-      toast.error(`Failed: ${error.value}`)
-    }
-  })
-}
-</script>
-```
+Both `dispatch()` and `useQueue().add()` provide automatic real-time updates:
 
 **How it works:**
-- Worker publishes events to Redis Pub/Sub when job state changes
-- SSE endpoint streams events to browser in real-time
-- Reactive refs update automatically - no polling needed
+- Server: Updates via Redis Pub/Sub
+- Client: Updates via Server-Sent Events (SSE)
+- Both get the same reactive refs that update in real-time
 - Connection auto-closes when job completes or fails
-- Works with both `useQueue()` (client) and `dispatch()` (server)
 
 **All lifecycle events are streamed:**
 - `waiting` - Job added to queue
@@ -337,79 +338,55 @@ async function processData() {
 - `completed` - Job finished successfully
 - `failed` - Job failed with error
 
-The job handles completion notification:
+### Job Completion Notifications
+
+Use `onCompleted` and `onFailed` hooks in your job definition for notifications:
 
 ```typescript
 // server/jobs/ExportUserData.ts
 export default defineJob({
   async handle(data) {
-    // Generate export file
     const fileUrl = await generateExport(data.userId, data.format)
     return { fileUrl }
   },
   
   async onCompleted(job, result) {
-    // Send email notification when complete
+    // Send email notification
     await sendEmail(job.data.email, {
       subject: 'Your export is ready',
-      body: `Download your ${job.data.format} file: ${result.fileUrl}`
+      body: `Download: ${result.fileUrl}`
     })
     
-    // Or trigger a webhook
+    // Or trigger webhook
     await fetch('https://your-app.com/api/webhooks/export-complete', {
       method: 'POST',
-      body: JSON.stringify({
-        userId: job.data.userId,
-        fileUrl: result.fileUrl
-      })
+      body: JSON.stringify({ userId: job.data.userId, fileUrl: result.fileUrl })
     })
     
     // Or send push notification
     await sendPushNotification(job.data.userId, {
       title: 'Export Ready',
-      body: 'Your data export is ready to download'
+      body: 'Your data export is ready'
     })
   },
   
   async onFailed(job, error) {
-    // Notify user of failure
     await sendEmail(job.data.email, {
       subject: 'Export failed',
-      body: `Sorry, your export failed: ${error.message}`
+      body: `Error: ${error.message}`
     })
   }
 })
 ```
 
-For real-time UI updates, use WebSockets or Server-Sent Events in the `onCompleted` hook:
+### Direct Queue API (Advanced)
 
-```typescript
-// server/jobs/ProcessVideo.ts
-export default defineJob({
-  async handle(data, job) {
-    const result = await processVideo(data.videoUrl)
-    return result
-  },
-  
-  async onCompleted(job, result) {
-    // Emit real-time event via WebSocket/SSE
-    const io = useSocketIO() // Your WebSocket implementation
-    io.to(job.data.userId).emit('video-processed', {
-      videoId: job.data.videoId,
-      url: result.url
-    })
-  }
-})
-```
-
-### Direct Queue API (Server-Side)
-
-For advanced control, use `useQueue` directly:
+For advanced control, use `useServerQueue()` to get the BullMQ Queue directly:
 
 ```typescript
 // server/api/batch-process.post.ts
 export default defineEventHandler(async (event) => {
-  const queue = useQueue('processing')
+  const queue = useServerQueue('processing')
   
   const items = await readBody(event)
   
@@ -424,6 +401,8 @@ export default defineEventHandler(async (event) => {
   return { queued: items.length }
 })
 ```
+
+**Note:** `useServerQueue()` returns a BullMQ Queue object (not reactive). Use `dispatch()` for reactive refs.
 
 ### Custom Worker Scripts
 
@@ -556,23 +535,9 @@ Monitor from client:
 
 ```vue
 <script setup>
-const progress = ref(0)
-const status = ref('waiting')
+const { jobId, progress, status } = await queue.add('ProcessVideo', { url })
 
-async function processVideo(url: string) {
-  const result = await queue.add('ProcessVideo', { url })
-  
-  // Poll for progress
-  const interval = setInterval(async () => {
-    const job = await $fetch(`/api/queue/default/${result.jobId}`)
-    progress.value = job.progress || 0
-    status.value = job.state
-    
-    if (job.state === 'completed' || job.state === 'failed') {
-      clearInterval(interval)
-    }
-  }, 1000)
-}
+// Refs update automatically - no polling!
 </script>
 
 <template>
@@ -869,58 +834,109 @@ export default defineJob<{ userId: string }>({
 
 #### `dispatch(jobName, data, options?)`
 
-Dispatch a job by name (server-side only).
+Dispatch a job by name. Works on both client and server.
 
 **Parameters:**
 - `jobName: string` - Job name (use dot notation for nested jobs)
 - `data: any` - Job data
 - `options?: JobOptions` - Optional BullMQ job options
 
-**Returns:** `Promise<Job>` - BullMQ Job object with properties like `id`, `queueName`, `data`, etc.
+**Returns:** `Promise<JobResponse<R>>` - Object with reactive refs:
+```typescript
+{
+  jobId: string
+  queueName: string
+  progress: Ref<number>           // 0-100, updates in real-time
+  status: Ref<'waiting' | 'active' | 'completed' | 'failed' | 'delayed'>
+  result: Ref<R | null>           // Job result when completed
+  error: Ref<string | null>       // Error message if failed
+  refresh: () => Promise<void>    // Manually refresh status
+}
+```
 
 **Example:**
 ```typescript
-const job = await dispatch('SendEmail', { to: 'user@example.com' })
-console.log(job.id)        // Job ID
-console.log(job.queueName) // Queue name
+// Server-side (API route)
+const { jobId, progress, status, result } = await dispatch('SendEmail', { 
+  to: 'user@example.com' 
+})
 
 // Nested job
-const job2 = await dispatch('emails.Welcome', { userId: '123' })
+await dispatch('emails.Welcome', { userId: '123' })
 ```
 
 ### Client-Side API
 
 #### `useQueue(queueName?)`
 
-Get a queue instance for adding jobs from Vue components.
+Get a queue instance for adding jobs. Works on both client and server.
 
 **Parameters:**
 - `queueName?: string` - Queue name (default: 'default')
 
 **Returns:** Queue instance with `add()` method
 
-**Example:**
+**`add()` Method:**
 ```typescript
+async add<T, R>(
+  jobName: string, 
+  data: T, 
+  options?: JobOptions
+): Promise<JobResponse<R>>
+```
+
+**JobResponse Object:**
+```typescript
+{
+  jobId: string                    // Job ID
+  queueName: string                // Queue name
+  progress: Ref<number>            // Reactive progress (0-100)
+  status: Ref<'waiting' | 'active' | 'completed' | 'failed' | 'delayed'>
+  result: Ref<R | null>            // Reactive job result
+  error: Ref<string | null>        // Reactive error message
+  refresh: () => Promise<void>     // Manually refresh status
+}
+```
+
+**Example:**
+```vue
+<script setup>
 const queue = useQueue()
-const result = await queue.add('job-name', { data: 'value' })
+
+async function sendEmail() {
+  // Get reactive refs that update automatically
+  const { jobId, progress, status, result, error } = await queue.add('SendEmail', {
+    to: 'user@example.com'
+  })
+  
+  // Watch real-time updates
+  watch(progress, (val) => console.log(`Progress: ${val}%`))
+  watch(status, (val) => {
+    if (val === 'completed') console.log('Done!', result.value)
+  })
+}
+</script>
 ```
 
 ### Server-Side API
 
-#### `useQueue(queueName?)`
+#### `useServerQueue(queueName?)`
 
-Get or create a queue instance (server-side).
+Get the BullMQ Queue instance directly (advanced use).
 
 **Parameters:**
 - `queueName?: string` - Queue name (default: 'default')
 
-**Returns:** BullMQ Queue instance
+**Returns:** BullMQ Queue instance (not reactive)
 
 **Example:**
 ```typescript
-const queue = useQueue('emails')
-await queue.add('send-email', { to: 'user@example.com' })
+const queue = useServerQueue('emails')
+const job = await queue.add('send-email', { to: 'user@example.com' })
+console.log(job.id) // BullMQ Job object
 ```
+
+**Note:** For reactive refs, use `dispatch()` instead.
 
 #### `useQueueConnection()`
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest'
+import { describe, it, expect, afterEach, vi, afterAll } from 'vitest'
 import { createQueue, createWorker, getQueue, getWorker, closeAll } from '../../src/runtime/server/utils/queue'
 
 describe('Queue Utils', () => {
@@ -10,6 +10,14 @@ describe('Queue Utils', () => {
 
   afterEach(async () => {
     await closeAll()
+    // Give time for connections to fully close
+    await new Promise(resolve => setTimeout(resolve, 100))
+  })
+
+  afterAll(async () => {
+    // Final cleanup
+    await closeAll()
+    await new Promise(resolve => setTimeout(resolve, 100))
   })
 
   describe('createQueue', () => {

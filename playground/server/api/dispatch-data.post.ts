@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   return {
     success: true,
     message: 'Data processing job dispatched',
-    jobId: job.id,
+    jobId: job.jobId,
     queueName: job.queueName,
   }
 })

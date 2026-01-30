@@ -2,12 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { dispatch } from '../../src/runtime/server/utils/dispatch'
 import { registerJob } from '../../src/runtime/server/utils/jobRegistry'
 import { defineJob } from '../../src/runtime/server/utils/defineJob'
-import * as composables from '../../src/runtime/server/utils/composables'
 
-// Mock useServerQueue
+// Mock $fetch
+global.$fetch = vi.fn() as unknown as typeof $fetch
+
+// Mock subscribeToJob
+vi.mock('../../src/runtime/server/utils/pubsub', () => ({
+  subscribeToJob: vi.fn().mockResolvedValue(async () => {}),
+}))
+
+// Mock useQueueConnection
 vi.mock('../../src/runtime/server/utils/composables', () => ({
-  useServerQueue: vi.fn(),
-  useQueueConnection: vi.fn(),
+  useQueueConnection: vi.fn().mockReturnValue({
+    host: '127.0.0.1',
+    port: 6379,
+  }),
 }))
 
 describe('dispatch', () => {
@@ -24,23 +33,27 @@ describe('dispatch', () => {
 
     registerJob('TestJob', job)
 
-    const mockJob = { id: '123', name: 'TestJob', data: { foo: 'bar' } }
-    const mockAdd = vi.fn().mockResolvedValue(mockJob)
-    vi.mocked(composables.useServerQueue).mockReturnValue({
-      add: mockAdd,
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    const mockFetch = $fetch as unknown as ReturnType<typeof vi.fn>
+    mockFetch.mockResolvedValue({ jobId: '123' })
 
     const result = await dispatch('TestJob', { foo: 'bar' })
 
-    expect(result).toEqual(mockJob)
-    expect(result.id).toBe('123')
+    expect(result.jobId).toBe('123')
+    expect(result.queueName).toBe('default')
+    expect(result.progress.value).toBe(0)
+    expect(result.status.value).toBe('waiting')
 
-    expect(mockAdd).toHaveBeenCalledWith(
-      'TestJob',
-      { foo: 'bar' },
-      undefined,
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/queue/add',
+      {
+        method: 'POST',
+        body: {
+          queueName: 'default',
+          jobName: 'TestJob',
+          data: { foo: 'bar' },
+          options: undefined,
+        },
+      },
     )
   })
 
@@ -60,19 +73,21 @@ describe('dispatch', () => {
 
     registerJob('EmailJob', job)
 
-    const mockJob = { id: '456', name: 'EmailJob', data: { to: 'test@example.com' } }
-    const mockAdd = vi.fn().mockResolvedValue(mockJob)
-    vi.mocked(composables.useServerQueue).mockReturnValue({
-
-      add: mockAdd,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    const mockFetch = $fetch as unknown as ReturnType<typeof vi.fn>
+    mockFetch.mockResolvedValue({ jobId: '456' })
 
     const result = await dispatch('EmailJob', { to: 'test@example.com' })
 
-    expect(result).toEqual(mockJob)
-    expect(result.id).toBe('456')
-    expect(composables.useServerQueue).toHaveBeenCalledWith('emails')
+    expect(result.jobId).toBe('456')
+    expect(result.queueName).toBe('emails')
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/queue/add',
+      expect.objectContaining({
+        body: expect.objectContaining({
+          queueName: 'emails',
+        }),
+      }),
+    )
   })
 
   it('should use queue from dispatch options', async () => {
@@ -84,19 +99,21 @@ describe('dispatch', () => {
 
     registerJob('TestJob', job)
 
-    const mockJob = { id: '789', name: 'TestJob', data: { data: 'test' } }
-    const mockAdd = vi.fn().mockResolvedValue(mockJob)
-
-    vi.mocked(composables.useServerQueue).mockReturnValue({
-      add: mockAdd,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    const mockFetch = $fetch as unknown as ReturnType<typeof vi.fn>
+    mockFetch.mockResolvedValue({ jobId: '789' })
 
     const result = await dispatch('TestJob', { data: 'test' }, { queue: 'priority' })
 
-    expect(result).toEqual(mockJob)
-    expect(result.id).toBe('789')
-    expect(composables.useServerQueue).toHaveBeenCalledWith('priority')
+    expect(result.jobId).toBe('789')
+    expect(result.queueName).toBe('priority')
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/queue/add',
+      expect.objectContaining({
+        body: expect.objectContaining({
+          queueName: 'priority',
+        }),
+      }),
+    )
   })
 
   it('should merge job options with dispatch options', async () => {
@@ -112,26 +129,29 @@ describe('dispatch', () => {
 
     registerJob('TestJob', job)
 
-    const mockJob = { id: '999', name: 'TestJob', data: { data: 'test' } }
-    const mockAdd = vi.fn().mockResolvedValue(mockJob)
-    vi.mocked(composables.useServerQueue).mockReturnValue({
-      add: mockAdd,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    const mockFetch = $fetch as unknown as ReturnType<typeof vi.fn>
+    mockFetch.mockResolvedValue({ jobId: '999' })
 
     const result = await dispatch('TestJob', { data: 'test' }, {
       delay: 5000,
       priority: 2, // Should override job definition
     })
 
-    expect(result).toEqual(mockJob)
-    expect(mockAdd).toHaveBeenCalledWith(
-      'TestJob',
-      { data: 'test' },
+    expect(result.jobId).toBe('999')
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/queue/add',
       {
-        attempts: 3,
-        priority: 2, // Dispatch options take precedence
-        delay: 5000,
+        method: 'POST',
+        body: {
+          queueName: 'default',
+          jobName: 'TestJob',
+          data: { data: 'test' },
+          options: {
+            attempts: 3,
+            priority: 2, // Dispatch options take precedence
+            delay: 5000,
+          },
+        },
       },
     )
   })
@@ -145,20 +165,23 @@ describe('dispatch', () => {
 
     registerJob('SimpleJob', job)
 
-    const mockJob = { id: '111', name: 'SimpleJob', data: { test: true } }
-    const mockAdd = vi.fn().mockResolvedValue(mockJob)
-    vi.mocked(composables.useServerQueue).mockReturnValue({
-      add: mockAdd,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    const mockFetch = $fetch as unknown as ReturnType<typeof vi.fn>
+    mockFetch.mockResolvedValue({ jobId: '111' })
 
     const result = await dispatch('SimpleJob', { test: true })
 
-    expect(result).toEqual(mockJob)
-    expect(mockAdd).toHaveBeenCalledWith(
-      'SimpleJob',
-      { test: true },
-      undefined,
+    expect(result.jobId).toBe('111')
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/queue/add',
+      {
+        method: 'POST',
+        body: {
+          queueName: 'default',
+          jobName: 'SimpleJob',
+          data: { test: true },
+          options: undefined,
+        },
+      },
     )
   })
 })

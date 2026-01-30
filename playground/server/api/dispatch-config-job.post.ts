@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     success: true,
-    jobId: job.id,
+    jobId: job.jobId,
     queueName: job.queueName,
   }
 })

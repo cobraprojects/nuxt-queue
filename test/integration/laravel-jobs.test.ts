@@ -3,11 +3,21 @@ import type { Job } from 'bullmq'
 import { defineJob } from '../../src/runtime/server/utils/defineJob'
 import { registerJob, getAllJobs } from '../../src/runtime/server/utils/jobRegistry'
 import { dispatch } from '../../src/runtime/server/utils/dispatch'
-import * as composables from '../../src/runtime/server/utils/composables'
 
+// Mock $fetch
+global.$fetch = vi.fn() as unknown as typeof $fetch
+
+// Mock subscribeToJob
+vi.mock('../../src/runtime/server/utils/pubsub', () => ({
+  subscribeToJob: vi.fn().mockResolvedValue(async () => {}),
+}))
+
+// Mock useQueueConnection
 vi.mock('../../src/runtime/server/utils/composables', () => ({
-  useServerQueue: vi.fn(),
-  useQueueConnection: vi.fn(),
+  useQueueConnection: vi.fn().mockReturnValue({
+    host: '127.0.0.1',
+    port: 6379,
+  }),
 }))
 
 describe('File-Based Jobs Integration', () => {
@@ -45,34 +55,36 @@ describe('File-Based Jobs Integration', () => {
     // 2. Register the job
     registerJob('SendEmailJob', job)
 
-    // 3. Mock queue
-    const mockAdd = vi.fn().mockResolvedValue({ id: 'job-123' })
-    vi.mocked(composables.useServerQueue).mockReturnValue({
-      add: mockAdd,
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    // 3. Mock $fetch
+    const mockFetch = $fetch as unknown as ReturnType<typeof vi.fn>
+    mockFetch.mockResolvedValue({ jobId: 'job-123' })
 
     // 4. Dispatch the job
     const result = await dispatch('SendEmailJob', {
       to: 'user@example.com',
     })
 
-    // 5. Verify - dispatch now returns BullMQ Job object
-    expect(result).toEqual({
-      id: 'job-123',
-    })
-    expect(result.id).toBe('job-123')
+    // 5. Verify - dispatch now returns JobResponse with reactive refs
+    expect(result.jobId).toBe('job-123')
+    expect(result.queueName).toBe('emails')
+    expect(result.progress.value).toBe(0)
+    expect(result.status.value).toBe('waiting')
 
-    expect(composables.useServerQueue).toHaveBeenCalledWith('emails')
-    expect(mockAdd).toHaveBeenCalledWith(
-      'SendEmailJob',
-      { to: 'user@example.com' },
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/queue/add',
       {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 2000,
+        method: 'POST',
+        body: {
+          queueName: 'emails',
+          jobName: 'SendEmailJob',
+          data: { to: 'user@example.com' },
+          options: {
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 2000,
+            },
+          },
         },
       },
     )
@@ -132,12 +144,8 @@ describe('File-Based Jobs Integration', () => {
 
     registerJob('ProgressJob', job)
 
-    const mockAdd = vi.fn().mockResolvedValue({ id: 'progress-job' })
-    vi.mocked(composables.useServerQueue).mockReturnValue({
-
-      add: mockAdd,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    const mockFetch = $fetch as unknown as ReturnType<typeof vi.fn>
+    mockFetch.mockResolvedValue({ jobId: 'progress-job' })
 
     // Simulate job execution
     const mockJob = {
@@ -171,22 +179,26 @@ describe('File-Based Jobs Integration', () => {
 
     registerJob('FailingJob', job)
 
-    const mockAdd = vi.fn().mockResolvedValue({ id: 'failing-job' })
-    vi.mocked(composables.useServerQueue).mockReturnValue({
-      add: mockAdd,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    const mockFetch = $fetch as unknown as ReturnType<typeof vi.fn>
+    mockFetch.mockResolvedValue({ jobId: 'failing-job' })
 
     await dispatch('FailingJob', { test: true })
 
-    expect(mockAdd).toHaveBeenCalledWith(
-      'FailingJob',
-      { test: true },
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/queue/add',
       {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
+        method: 'POST',
+        body: {
+          queueName: 'default',
+          jobName: 'FailingJob',
+          data: { test: true },
+          options: {
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 1000,
+            },
+          },
         },
       },
     )
@@ -216,11 +228,8 @@ describe('File-Based Jobs Integration', () => {
 
     registerJob('TypedEmailJob', job)
 
-    const mockAdd = vi.fn().mockResolvedValue({ id: 'typed-job' })
-    vi.mocked(composables.useServerQueue).mockReturnValue({
-      add: mockAdd,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    const mockFetch = $fetch as unknown as ReturnType<typeof vi.fn>
+    mockFetch.mockResolvedValue({ jobId: 'typed-job' })
 
     await dispatch('TypedEmailJob', {
       to: 'user@example.com',
@@ -228,6 +237,6 @@ describe('File-Based Jobs Integration', () => {
       body: 'Hello',
     })
 
-    expect(mockAdd).toHaveBeenCalled()
+    expect(mockFetch).toHaveBeenCalled()
   })
 })

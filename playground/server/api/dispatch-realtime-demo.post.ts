@@ -7,7 +7,7 @@ export default defineEventHandler(async () => {
 
   return {
     success: true,
-    jobId: job.id,
+    jobId: job.jobId,
     queueName: job.queueName,
     message: 'Job dispatched! Use the returned jobId to monitor progress in real-time.',
   }
