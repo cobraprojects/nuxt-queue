@@ -1,6 +1,6 @@
 {
   "name": "nuxt-queuekit",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "description": "Background job queue for Nuxt applications powered by BullMQ and Redis",
   "repository": {
     "type": "git",
