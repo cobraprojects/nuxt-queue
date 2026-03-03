@@ -63,41 +63,28 @@ export async function closeAll() {
     return
   }
 
-  const closePromises = []
-
-  // Close all queues
-  for (const queue of queues.values()) {
+  // Avoid touching client accessors here because they can initialize Redis connections
+  // during teardown and create noisy unhandled rejections in tests.
+  const queueClosePromises = Array.from(queues.values()).map(async (queue) => {
     try {
-      const client = await queue.client
-      const status = client.status
-      // Only close/disconnect if connection was actually initiated
-      if (status === 'ready' || status === 'connecting' || status === 'reconnecting') {
-        closePromises.push(queue.close())
-      }
-      // For 'wait' or 'end' status, just skip - connection was never opened
+      await queue.close()
     }
     catch {
-      // Ignore errors during cleanup
+      // Ignore cleanup errors
     }
-  }
+  })
 
-  // Close all workers
-  for (const worker of workers.values()) {
+  const workerClosePromises = Array.from(workers.values()).map(async (worker) => {
     try {
-      const client = await worker.client
-      const status = client.status
-      // Only close/disconnect if connection was actually initiated
-      if (status === 'ready' || status === 'connecting' || status === 'reconnecting') {
-        closePromises.push(worker.close())
-      }
-      // For 'wait' or 'end' status, just skip - connection was never opened
+      // Force close to avoid waiting on Redis state transitions during shutdown.
+      await worker.close(true)
     }
     catch {
-      // Ignore errors during cleanup
+      // Ignore cleanup errors
     }
-  }
+  })
 
-  await Promise.allSettled(closePromises)
+  await Promise.allSettled([...queueClosePromises, ...workerClosePromises])
   queues.clear()
   workers.clear()
 }
