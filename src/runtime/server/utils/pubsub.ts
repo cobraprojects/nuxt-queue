@@ -122,3 +122,12 @@ export async function closeConnections(): Promise<void> {
 
   await Promise.allSettled(promises)
 }
+
+/**
+ * Reset connections (for test cleanup)
+ * Closes and clears all connections
+ */
+export function resetConnections(): void {
+  publisher = null
+  subscriber = null
+}

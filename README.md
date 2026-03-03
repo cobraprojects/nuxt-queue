@@ -5,102 +5,77 @@
 [![License][license-src]][license-href]
 [![Nuxt][nuxt-src]][nuxt-href]
 
-Background job queue for Nuxt applications powered by BullMQ and Redis.
-
-<!-- - [🏀 Online playground](https://stackblitz.com/github/your-org/nuxt-queuekit?file=playground%2Fapp.vue) -->
-<!-- - [📖 &nbsp;Documentation](https://example.com) -->
+Background job queue for Nuxt applications, powered by BullMQ and Redis.
 
 ## Table of Contents
 
-- [Features](#features)
+- [What You Get](#what-you-get)
 - [Quick Start](#quick-start)
-- [Basic Usage](#basic-usage)
-- [Advanced Usage](#advanced-usage)
+- [Core Workflow](#core-workflow)
+- [Monitor and Control Jobs](#monitor-and-control-jobs)
 - [Configuration](#configuration)
-- [Production Deployment](#production-deployment)
+- [Production](#production)
 - [API Reference](#api-reference)
-- [Examples](#examples)
 - [Troubleshooting](#troubleshooting)
-- [Architecture](#architecture)
-- [Roadmap](#roadmap)
 
-## Features
+## What You Get
 
-- 🎯 &nbsp;**File-Based Jobs** - Define job classes with auto-discovery
-- 🚀 &nbsp;**Separate Worker Process** - Workers run independently from your web server
-- 📦 &nbsp;**BullMQ Powered** - Robust Redis-backed queue system
-- 🔄 &nbsp;**Simple API** - Easy job creation from client and server
-- ⚡ &nbsp;**Real-time Monitoring** - Live job progress updates via SSE with <100ms latency
-- 📊 &nbsp;**Job Status** - Built-in endpoints to check job progress
-- 🎨 &nbsp;**Type Safe** - Full TypeScript support
-- 🔁 &nbsp;**Lifecycle Hooks** - `onCompleted` and `onFailed` callbacks with automatic event streaming
-- 🌐 &nbsp;**Scalable** - Run multiple worker processes for high throughput
+- File-based jobs (`server/jobs/**`) with auto-discovery
+- Separate worker process for background execution
+- Redis-backed queues via BullMQ
+- Real-time progress/status updates
+- Job lifecycle hooks (`onCompleted`, `onFailed`)
+- Queue stats + cancel/retry endpoints
+- Full TypeScript support
 
 ## Quick Start
 
-### Prerequisites
+### 1. Prerequisite
 
-You need Redis running. Choose one:
+Run Redis:
 
 ```bash
-# Option 1: Docker (easiest)
 docker run -d -p 6379:6379 redis
-
-# Option 2: Install locally
-# macOS
-brew install redis && brew services start redis
-
-# Ubuntu/Debian
-sudo apt-get install redis-server && sudo systemctl start redis
 ```
 
-### Installation
-
-Install the module using Nuxi:
+### 2. Install
 
 ```bash
 npx nuxi@latest module add nuxt-queuekit
 ```
 
-This will automatically install the package and add it to your `nuxt.config.ts`.
-
-Alternatively, install manually:
+Or manually:
 
 ```bash
 npm install nuxt-queuekit
 ```
 
-Then add it to your `nuxt.config.ts`:
-
-```typescript
+```ts
+// nuxt.config.ts
 export default defineNuxtConfig({
-  modules: ['nuxt-queuekit']
+  modules: ['nuxt-queuekit'],
 })
 ```
 
-That's it! The module uses Redis at `127.0.0.1:6379` by default. You can [customize this configuration](#configuration) if needed.
-
-### Start Development
+### 3. Start app + worker
 
 ```bash
-# Terminal 1: Start your Nuxt app
+# terminal 1
 npm run dev
 
-# Terminal 2: Start the worker process
+# terminal 2
 npx nuxt-queuekit worker
 ```
 
-You're ready to create jobs! ✨
+That is enough to run jobs using default Redis (`127.0.0.1:6379`).
 
-## Basic Usage
+## Core Workflow
 
-Nuxt Queue uses a **file-based approach** where you define job classes and dispatch them by name.
+### Step 1: Define a job
 
-### Step 1: Create a Job
+Create a file in `server/jobs`:
 
-Create job files in the `server/jobs/` directory:
-
-```typescript
+```ts
 // server/jobs/SendWelcomeEmail.ts
 interface WelcomeEmailData {
   userId: string
@@ -109,468 +84,163 @@ interface WelcomeEmailData {
 }
 
 export default defineJob<WelcomeEmailData>({
-  async handle(data, job) {
-    // Your job logic here
-    console.log(`Sending welcome email to ${data.name}`)
-    
+  async handle(data) {
     await sendEmail({
       to: data.email,
       subject: 'Welcome!',
       template: 'welcome',
-      data: { name: data.name }
+      data: { name: data.name },
     })
-    
-    return { success: true, sentAt: new Date() }
-  }
+
+    return { success: true }
+  },
 })
 ```
 
-> **Note:** `defineJob` is automatically available - no import needed!
+`defineJob` is auto-imported in job files.
 
-### Step 2: Dispatch the Job
+### Step 2: Dispatch from server runtime
 
-Use `dispatch()` anywhere in your app - API routes, plugins, middleware, etc:
+Use `dispatch()` in server runtime code (API routes, server plugins, server utilities):
 
-```typescript
+```ts
 // server/api/register.post.ts
 export default defineEventHandler(async (event) => {
   const { email, name } = await readBody(event)
-  
-  // Create user
   const user = await createUser({ email, name })
-  
-  // Dispatch job - returns reactive refs with real-time updates
-  const { jobId, progress, status, result } = await dispatch('SendWelcomeEmail', {
+
+  const { jobId } = await dispatch('SendWelcomeEmail', {
     userId: user.id,
     email: user.email,
-    name: user.name
+    name: user.name,
   })
-  
-  // Optionally watch progress
-  watch(progress, (value) => {
-    console.log(`Email job progress: ${value}%`)
-  })
-  
+
   return { success: true, jobId }
 })
 ```
 
-### Step 3: Worker Processes It
+### Step 3: Dispatch from client components
 
-The worker automatically discovers and processes all jobs in `server/jobs/`:
+Use `useQueue()` on the client:
 
-```bash
-npx nuxt-queuekit worker
+```vue
+<script setup lang="ts">
+const queue = useQueue('default')
+
+async function start() {
+  const { jobId, progress, status, result, error } = await queue.add('SendWelcomeEmail', {
+    userId: '1',
+    email: 'user@example.com',
+    name: 'User',
+  })
+}
+</script>
 ```
 
-That's it! Define → Dispatch → Process.
+### Organize jobs in folders
 
-### Organizing Jobs in Subdirectories
+Nested files map to dot notation:
 
-For larger apps, organize jobs into subdirectories:
-
-```
+```text
 server/jobs/
-├── SendWelcomeEmail.ts
-├── emails/
-│   ├── NewsletterEmail.ts
-│   └── PasswordResetEmail.ts
-└── media/
-    ├── ProcessImage.ts
-    └── GenerateThumbnail.ts
+  emails/NewsletterEmail.ts
+  media/ProcessImage.ts
 ```
 
-Use dot notation to dispatch nested jobs:
-
-```typescript
+```ts
 await dispatch('emails.NewsletterEmail', { ... })
 await dispatch('media.ProcessImage', { ... })
 ```
 
-### Job Options & Retry Logic
+### Job options and retries
 
-By default, jobs run once with no retries. Configure retry behavior and other options:
-
-```typescript
-// server/jobs/ProcessPayment.ts
+```ts
 export default defineJob({
-  async handle(data) {
-    const result = await processPayment(data.orderId, data.amount)
-    return result
-  },
-  
-  // Retry up to 3 times with exponential backoff
+  queue: 'payments',
   options: {
     attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 2000 // Start with 2s, then 4s, then 8s
-    }
+    backoff: { type: 'exponential', delay: 2000 },
   },
-  
-  // Optional: Use a dedicated queue
-  queue: 'payments'
+  async handle(data) {
+    return processPayment(data)
+  },
 })
 ```
 
-### Lifecycle Hooks
+### Lifecycle hooks
 
-React to job events:
-
-```typescript
-// server/jobs/GenerateReport.ts
+```ts
 export default defineJob({
   async handle(data, job) {
-    // Update progress for long-running jobs
-    await job.updateProgress(25)
-    const data = await fetchData()
-    
     await job.updateProgress(50)
-    const processed = await processData(data)
-    
-    await job.updateProgress(75)
-    const report = await generatePDF(processed)
-    
+    const output = await generateReport(data)
     await job.updateProgress(100)
-    return { reportUrl: report.url }
+    return output
   },
-  
+
   async onCompleted(job, result) {
-    console.log(`✅ Report generated: ${result.reportUrl}`)
-    await notifyUser(job.data.userId, result.reportUrl)
+    await notifyUser(job.data.userId, result)
   },
-  
+
   async onFailed(job, error) {
-    console.error(`❌ Report generation failed:`, error)
-    await alertAdmin(job.data.userId, error.message)
-  }
+    await alertAdmin(job?.data?.userId, error.message)
+  },
 })
 ```
 
-### Checking Job Status
+## Monitor and Control Jobs
 
-Both `dispatch()` and `useQueue().add()` return the same reactive response:
+### Check one job
 
-```typescript
-const { 
-  jobId,        // string - Job ID
-  queueName,    // string - Queue name
-  progress,     // Ref<number> - Progress 0-100 (updates in real-time)
-  status,       // Ref<'waiting' | 'active' | 'completed' | 'failed' | 'delayed'>
-  result,       // Ref<R | null> - Job result when completed
-  error,        // Ref<string | null> - Error message if failed
-  refresh       // () => Promise<void> - Manually refresh status
-} = await dispatch('GenerateReport', { userId: '123' })
-
-// Watch real-time updates
-watch(status, (value) => {
-  console.log(`Status: ${value}`)
-  if (value === 'completed') {
-    console.log('Result:', result.value)
-  }
-})
-```
-
-You can also check status via the API endpoint:
-
-```typescript
+```ts
 const status = await $fetch(`/api/queue/${queueName}/${jobId}`)
-console.log(status.state)      // 'waiting' | 'active' | 'completed' | 'failed'
-console.log(status.progress)   // 0-100
-console.log(status.returnvalue) // Job result
+// status.state -> waiting | active | completed | failed | delayed
 ```
 
-## Advanced Usage
+### Stream live events (SSE)
 
-### `useQueue()` vs `dispatch()`
-
-Both APIs return the same reactive `JobResponse` with real-time updates. Choose based on your use case:
-
-**Use `dispatch()` when:**
-- ✅ Quick one-off job dispatching
-- ✅ Server-side API routes and handlers
-- ✅ You don't need to reuse the queue instance
-
-**Use `useQueue()` when:**
-- ✅ Dispatching multiple jobs to the same queue
-- ✅ Client-side Vue components (automatic cleanup on unmount)
-- ✅ You want a reusable composable pattern
-
-```typescript
-// dispatch() - Quick and simple
-await dispatch('SendEmail', { to: 'user@example.com' })
-
-// useQueue() - Reusable instance
-const queue = useQueue('emails')
-await queue.add('SendEmail', { to: 'user1@example.com' })
-await queue.add('SendEmail', { to: 'user2@example.com' })
-await queue.add('SendEmail', { to: 'user3@example.com' })
+```ts
+const es = new EventSource(`/api/queue/${queueName}/${jobId}/events`)
 ```
 
-Both return identical `JobResponse` objects with reactive refs:
+### Cancel waiting/delayed job
 
-```typescript
-const { jobId, progress, status, result, error, refresh } = await dispatch('ProcessData', data)
-// OR
-const { jobId, progress, status, result, error, refresh } = await queue.add('ProcessData', data)
-
-// Watch real-time updates
-watch(progress, (val) => console.log(`Progress: ${val}%`))
-watch(status, (val) => {
-  if (val === 'completed') console.log('Done!', result.value)
-})
+```ts
+await $fetch(`/api/queue/${queueName}/${jobId}/cancel`, { method: 'POST' })
 ```
 
-### Real-time Job Monitoring
+### Retry failed job
 
-Both `dispatch()` and `useQueue().add()` provide automatic real-time updates:
-
-**How it works:**
-- Server: Updates via Redis Pub/Sub
-- Client: Updates via Server-Sent Events (SSE)
-- Both get the same reactive refs that update in real-time
-- Connection auto-closes when job completes or fails
-
-**All lifecycle events are streamed:**
-- `waiting` - Job added to queue
-- `active` - Worker started processing
-- `progress` - Job reports progress (0-100)
-- `completed` - Job finished successfully
-- `failed` - Job failed with error
-
-### Job Completion Notifications
-
-Use `onCompleted` and `onFailed` hooks in your job definition for notifications:
-
-```typescript
-// server/jobs/ExportUserData.ts
-export default defineJob({
-  async handle(data) {
-    const fileUrl = await generateExport(data.userId, data.format)
-    return { fileUrl }
-  },
-  
-  async onCompleted(job, result) {
-    // Send email notification
-    await sendEmail(job.data.email, {
-      subject: 'Your export is ready',
-      body: `Download: ${result.fileUrl}`
-    })
-    
-    // Or trigger webhook
-    await fetch('https://your-app.com/api/webhooks/export-complete', {
-      method: 'POST',
-      body: JSON.stringify({ userId: job.data.userId, fileUrl: result.fileUrl })
-    })
-    
-    // Or send push notification
-    await sendPushNotification(job.data.userId, {
-      title: 'Export Ready',
-      body: 'Your data export is ready'
-    })
-  },
-  
-  async onFailed(job, error) {
-    await sendEmail(job.data.email, {
-      subject: 'Export failed',
-      body: `Error: ${error.message}`
-    })
-  }
-})
+```ts
+await $fetch(`/api/queue/${queueName}/${jobId}/retry`, { method: 'POST' })
 ```
 
-### Direct Queue API (Advanced)
+### Queue statistics
 
-For advanced control, use `useServerQueue()` to get the BullMQ Queue directly:
-
-```typescript
-// server/api/batch-process.post.ts
-export default defineEventHandler(async (event) => {
-  const queue = useServerQueue('processing')
-  
-  const items = await readBody(event)
-  
-  // Add multiple jobs with different priorities
-  for (const item of items) {
-    await queue.add('process-item', item, {
-      priority: item.urgent ? 1 : 10,
-      delay: item.scheduledFor ? item.scheduledFor - Date.now() : 0
-    })
-  }
-  
-  return { queued: items.length }
-})
-```
-
-**Note:** `useServerQueue()` returns a BullMQ Queue object (not reactive). Use `dispatch()` for reactive refs.
-
-### Custom Worker Scripts
-
-For the Direct Queue API approach, create custom worker scripts:
-
-```typescript
-// workers/custom-processor.ts
-export default async function (job) {
-  console.log('Processing:', job.name, job.data)
-  
-  // Your custom logic
-  const result = await processJob(job.data)
-  
-  return result
-}
-```
-
-Run with:
-
-```bash
-npx nuxt-queuekit worker --queue processing --worker workers/custom-processor.ts
-```
-
-### Multiple Queues Strategy
-
-Separate jobs by priority or resource requirements:
-
-```typescript
-// nuxt.config.ts
-export default defineNuxtConfig({
-  modules: ['nuxt-queuekit']
-})
-```
-
-```typescript
-// server/jobs/CriticalAlert.ts
-export default defineJob({
-  queue: 'critical', // High-priority queue
-  async handle(data) {
-    await sendAlert(data)
-  }
-})
-
-// server/jobs/MonthlyReport.ts
-export default defineJob({
-  queue: 'reports', // Low-priority, resource-intensive
-  async handle(data) {
-    await generateReport(data)
-  }
-})
-```
-
-Run dedicated workers:
-
-```bash
-# High concurrency for critical jobs
-npx nuxt-queuekit worker --queue critical --concurrency 20
-
-# Lower concurrency for resource-intensive jobs
-npx nuxt-queuekit worker --queue reports --concurrency 2
-
-# Default queue
-npx nuxt-queuekit worker
-```
-
-### Error Handling Patterns
-
-Handle failures gracefully:
-
-```typescript
-// server/jobs/SendNotification.ts
-export default defineJob({
-  async handle(data) {
-    try {
-      await sendPushNotification(data.userId, data.message)
-      return { delivered: true }
-    } catch (error) {
-      // Log but don't throw - mark as handled
-      if (error.code === 'DEVICE_NOT_FOUND') {
-        console.log('Device not found, skipping')
-        return { delivered: false, reason: 'device_not_found' }
-      }
-      
-      // Throw to trigger retry
-      throw error
-    }
-  },
-  
-  options: {
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 1000 }
-  },
-  
-  async onFailed(job, error) {
-    // After all retries exhausted
-    await logToMonitoring('notification_failed', {
-      userId: job.data.userId,
-      error: error.message
-    })
-  }
-})
-```
-
-### Progress Tracking for Long Jobs
-
-Report progress for better UX:
-
-```typescript
-// server/jobs/ProcessVideo.ts
-export default defineJob({
-  async handle(data, job) {
-    const video = await downloadVideo(data.url)
-    await job.updateProgress(20)
-    
-    const transcoded = await transcodeVideo(video)
-    await job.updateProgress(60)
-    
-    const thumbnail = await generateThumbnail(transcoded)
-    await job.updateProgress(80)
-    
-    const uploaded = await uploadToStorage(transcoded, thumbnail)
-    await job.updateProgress(100)
-    
-    return { videoUrl: uploaded.url, thumbnailUrl: thumbnail.url }
-  }
-})
-```
-
-Monitor from client:
-
-```vue
-<script setup>
-const { jobId, progress, status } = await queue.add('ProcessVideo', { url })
-
-// Refs update automatically - no polling!
-</script>
-
-<template>
-  <div>
-    <progress :value="progress" max="100" />
-    <p>Status: {{ status }}</p>
-  </div>
-</template>
+```ts
+const { stats, loading, error, refresh } = useQueueStats('default')
+await refresh()
 ```
 
 ## Configuration
 
-### Environment Variables
-
-Configure Redis connection via environment variables:
+### Environment variables
 
 ```bash
 NUXT_REDIS_HOST=127.0.0.1
 NUXT_REDIS_PORT=6379
-NUXT_REDIS_PASSWORD=your-password
-NUXT_REDIS_USERNAME=your-username
+NUXT_REDIS_PASSWORD=
+NUXT_REDIS_USERNAME=
 NUXT_REDIS_DB=0
 ```
 
-### Module Options
+### Module options
 
-Configure in `nuxt.config.ts`:
-
-```typescript
+```ts
+// nuxt.config.ts
 export default defineNuxtConfig({
   modules: ['nuxt-queuekit'],
   queue: {
-    // Redis connection (optional if using env vars)
     redis: {
       host: process.env.REDIS_HOST || '127.0.0.1',
       port: Number(process.env.REDIS_PORT) || 6379,
@@ -578,920 +248,140 @@ export default defineNuxtConfig({
       username: process.env.REDIS_USERNAME,
       db: Number(process.env.REDIS_DB) || 0,
     },
-    
-    // Custom jobs directory (default: 'server/jobs')
+
+    // default: server/jobs
     jobsDir: 'server/jobs',
-    
-    // Manually register jobs (optional)
+
+    // optional extra jobs
     jobs: {
-      // See "Registering Jobs from Config" below
-    },
-  }
-})
-```
-
-### Registering Jobs from Config
-
-Manually register jobs through configuration. Useful for:
-- Jobs from npm packages
-- Reusing jobs from different directories
-- Programmatic job registration
-
-**Note:** Config jobs are **appended** to auto-discovered jobs from `jobsDir`.
-
-```typescript
-export default defineNuxtConfig({
-  modules: ['nuxt-queuekit'],
-  queue: {
-    jobs: {
-      // Recommended: Use file paths
       SendNotification: './server/custom-jobs/SendNotification.ts',
-      ProcessPayment: './server/payments/ProcessPayment.ts',
-      
-      // From npm package
-      ThirdPartyJob: './node_modules/some-package/jobs/MyJob.js',
-      
-      // Inline definition (may trigger serialization warnings)
-      SimpleJob: {
-        async handle(data: { message: string }) {
-          console.log('Processing:', data.message)
-          return { success: true }
-        },
-        queue: 'default',
-      },
     },
-  }
+  },
 })
 ```
 
-Dispatch config jobs the same way:
+`jobs` entries are appended to auto-discovered jobs from `jobsDir`.
 
-```typescript
-await dispatch('SendNotification', { userId: 123, message: 'Hello!' })
-await dispatch('SimpleJob', { message: 'Test' })
-```
+## Production
 
-## Production Deployment
-
-### Running Workers in Production
-
-Workers should run as separate processes from your web server:
+Run web server and workers as separate processes:
 
 ```bash
-# Build your app
 npm run build
-
-# Start web server (Process 1)
 npm run start
-
-# Start workers (Process 2+)
 npx nuxt-queuekit worker --concurrency 10
 ```
 
-### Using Process Managers
-
-#### PM2
-
-```bash
-# Install PM2
-npm install -g pm2
-
-# Start web server
-pm2 start npm --name "nuxt-app" -- start
-
-# Start workers
-pm2 start "npx nuxt-queuekit worker --concurrency 10" --name "worker-default"
-pm2 start "npx nuxt-queuekit worker --queue emails --concurrency 5" --name "worker-emails"
-
-# Scale workers
-pm2 scale worker-default 3  # Run 3 instances
-
-# Monitor
-pm2 monit
-
-# Save configuration
-pm2 save
-pm2 startup
-```
-
-#### Docker
-
-```dockerfile
-# Dockerfile.worker
-FROM node:18-alpine
-
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --production
-
-COPY . .
-RUN npm run build
-
-CMD ["npx", "nuxt-queuekit", "worker", "--concurrency", "10"]
-```
-
-```yaml
-# docker-compose.yml
-version: '3.8'
-
-services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-
-  web:
-    build: .
-    ports:
-      - "3000:3000"
-    environment:
-      - NUXT_REDIS_HOST=redis
-    depends_on:
-      - redis
-
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    environment:
-      - NUXT_REDIS_HOST=redis
-    depends_on:
-      - redis
-    deploy:
-      replicas: 3  # Run 3 worker instances
-
-volumes:
-  redis-data:
-```
-
-### Kubernetes
-
-```yaml
-# worker-deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: queue-worker
-spec:
-  replicas: 5
-  selector:
-    matchLabels:
-      app: queue-worker
-  template:
-    metadata:
-      labels:
-        app: queue-worker
-    spec:
-      containers:
-      - name: worker
-        image: your-app:latest
-        command: ["npx", "nuxt-queuekit", "worker"]
-        args: ["--concurrency", "10"]
-        env:
-        - name: NUXT_REDIS_HOST
-          value: "redis-service"
-        - name: NUXT_REDIS_PORT
-          value: "6379"
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-```
-
-### Worker CLI Options
+### Worker CLI
 
 ```bash
 npx nuxt-queuekit worker [options]
 
 Options:
   --cwd <path>              Working directory (default: current directory)
-  --queue <name>            Queue name (default: 'default')
+  --queue <name>            Single queue name (legacy flag)
+  --queues <names>          Comma-separated queues in priority order
   --worker <path>           Path to custom worker script
-  --concurrency <number>    Concurrent jobs (default: 5)
-
-Examples:
-  npx nuxt-queuekit worker
-  npx nuxt-queuekit worker --queue emails --concurrency 10
-  npx nuxt-queuekit worker --queue processing --worker ./workers/custom.ts
+  --concurrency <number>    Concurrent jobs per worker (default: 5)
 ```
 
-### Scaling Strategy
-
-Different queues for different workloads:
+Examples:
 
 ```bash
-# High-priority, low-resource jobs (many workers)
-npx nuxt-queuekit worker --queue critical --concurrency 20
-
-# CPU-intensive jobs (fewer workers)
-npx nuxt-queuekit worker --queue processing --concurrency 2
-
-# I/O-bound jobs (moderate workers)
+npx nuxt-queuekit worker
 npx nuxt-queuekit worker --queue emails --concurrency 10
-
-# Default queue
-npx nuxt-queuekit worker --concurrency 5
+npx nuxt-queuekit worker --queues critical,default,low --concurrency 5
+npx nuxt-queuekit worker --queue processing --worker ./workers/custom.ts
 ```
 
 ## API Reference
 
-### File-Based Jobs API
+### `defineJob<T, R>(definition)`
 
-#### `defineJob<T>(definition)`
-
-Define a job class with handler and lifecycle hooks.
-
-**Type Parameters:**
-- `T` - Type of job data
-
-**Definition Object:**
-- `handle(data: T, job: Job): Promise<any>` - Job processor function (required)
-- `queue?: string` - Queue name (default: 'default')
-- `options?: JobOptions` - BullMQ job options
-- `onCompleted?(job: Job, result: any): Promise<void>` - Success callback
-- `onFailed?(job: Job, error: Error): Promise<void>` - Failure callback
-
-**Example:**
-```typescript
-export default defineJob<{ userId: string }>({
-  async handle(data, job) {
-    await processUser(data.userId)
-    return { success: true }
-  },
-  queue: 'users',
+```ts
+export default defineJob<{ userId: string }, { ok: true }>({
+  queue: 'default',
   options: { attempts: 3 },
-  async onCompleted(job, result) {
-    console.log('Done!', result)
-  }
-})
-```
-
-#### `dispatch(jobName, data, options?)`
-
-Dispatch a job by name. Works on both client and server.
-
-**Parameters:**
-- `jobName: string` - Job name (use dot notation for nested jobs)
-- `data: any` - Job data
-- `options?: JobOptions` - Optional BullMQ job options
-
-**Returns:** `Promise<JobResponse<R>>` - Object with reactive refs:
-```typescript
-{
-  jobId: string
-  queueName: string
-  progress: Ref<number>           // 0-100, updates in real-time
-  status: Ref<'waiting' | 'active' | 'completed' | 'failed' | 'delayed'>
-  result: Ref<R | null>           // Job result when completed
-  error: Ref<string | null>       // Error message if failed
-  refresh: () => Promise<void>    // Manually refresh status
-}
-```
-
-**Example:**
-```typescript
-// Server-side (API route)
-const { jobId, progress, status, result } = await dispatch('SendEmail', { 
-  to: 'user@example.com' 
-})
-
-// Nested job
-await dispatch('emails.Welcome', { userId: '123' })
-```
-
-### Client-Side API
-
-#### `useQueue(queueName?)`
-
-Get a queue instance for adding jobs. Works on both client and server.
-
-**Parameters:**
-- `queueName?: string` - Queue name (default: 'default')
-
-**Returns:** Queue instance with `add()` method
-
-**`add()` Method:**
-```typescript
-async add<T, R>(
-  jobName: string, 
-  data: T, 
-  options?: JobOptions
-): Promise<JobResponse<R>>
-```
-
-**JobResponse Object:**
-```typescript
-{
-  jobId: string                    // Job ID
-  queueName: string                // Queue name
-  progress: Ref<number>            // Reactive progress (0-100)
-  status: Ref<'waiting' | 'active' | 'completed' | 'failed' | 'delayed'>
-  result: Ref<R | null>            // Reactive job result
-  error: Ref<string | null>        // Reactive error message
-  refresh: () => Promise<void>     // Manually refresh status
-}
-```
-
-**Example:**
-```vue
-<script setup>
-const queue = useQueue()
-
-async function sendEmail() {
-  // Get reactive refs that update automatically
-  const { jobId, progress, status, result, error } = await queue.add('SendEmail', {
-    to: 'user@example.com'
-  })
-  
-  // Watch real-time updates
-  watch(progress, (val) => console.log(`Progress: ${val}%`))
-  watch(status, (val) => {
-    if (val === 'completed') console.log('Done!', result.value)
-  })
-}
-</script>
-```
-
-### Server-Side API
-
-#### `useServerQueue(queueName?)`
-
-Get the BullMQ Queue instance directly (advanced use).
-
-**Parameters:**
-- `queueName?: string` - Queue name (default: 'default')
-
-**Returns:** BullMQ Queue instance (not reactive)
-
-**Example:**
-```typescript
-const queue = useServerQueue('emails')
-const job = await queue.add('send-email', { to: 'user@example.com' })
-console.log(job.id) // BullMQ Job object
-```
-
-**Note:** For reactive refs, use `dispatch()` instead.
-
-#### `useQueueConnection()`
-
-Get the Redis connection configuration.
-
-**Returns:** Redis connection options object
-
-**Example:**
-```typescript
-const connection = useQueueConnection()
-console.log(connection.host, connection.port)
-```
-
-### Job Options
-
-Common BullMQ job options (all optional, with defaults shown):
-
-```typescript
-interface JobOptions {
-  delay?: number              // Delay in ms before processing (default: 0)
-  priority?: number           // Priority (lower = higher priority, default: none)
-  attempts?: number           // Max retry attempts (default: 1, no retries)
-  backoff?: {                 // Retry backoff strategy (default: none, retries immediately)
-    type: 'exponential' | 'fixed'
-    delay: number
-  }
-  removeOnComplete?: boolean  // Auto-remove on success (default: false)
-  removeOnFail?: boolean      // Auto-remove on failure (default: false)
-  timeout?: number            // Job timeout in ms (default: none)
-}
-```
-
-### Job Status Response
-
-When checking job status via `/api/queue/[queueName]/[jobId]`:
-
-```typescript
-interface JobStatus {
-  id: string
-  name: string
-  data: any
-  state: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed'
-  progress: number            // 0-100
-  returnvalue?: any           // Job result
-  failedReason?: string       // Error message if failed
-  timestamp: number
-  processedOn?: number
-  finishedOn?: number
-}
-```
-
-## Examples
-
-### User Registration Flow
-
-Complete user onboarding with multiple jobs:
-
-```typescript
-// server/jobs/SendWelcomeEmail.ts
-export default defineJob({
-  async handle(data: { userId: string, email: string, name: string }) {
-    await sendEmail({
-      to: data.email,
-      subject: `Welcome ${data.name}!`,
-      template: 'welcome',
-      data: { name: data.name }
-    })
-  },
-  options: { attempts: 3 }
-})
-
-// server/jobs/CreateUserProfile.ts
-export default defineJob({
-  async handle(data: { userId: string }) {
-    await db.profiles.create({
-      userId: data.userId,
-      createdAt: new Date()
-    })
-  }
-})
-
-// server/jobs/SendSlackNotification.ts
-export default defineJob({
-  queue: 'notifications',
-  async handle(data: { message: string }) {
-    await fetch(process.env.SLACK_WEBHOOK, {
-      method: 'POST',
-      body: JSON.stringify({ text: data.message })
-    })
-  }
-})
-
-// server/api/register.post.ts
-export default defineEventHandler(async (event) => {
-  const { email, name, password } = await readBody(event)
-  
-  // Create user
-  const user = await db.users.create({ email, name, password })
-  
-  // Dispatch jobs
-  await Promise.all([
-    dispatch('SendWelcomeEmail', { userId: user.id, email, name }),
-    dispatch('CreateUserProfile', { userId: user.id }),
-    dispatch('SendSlackNotification', { message: `New user: ${email}` })
-  ])
-  
-  return { success: true, userId: user.id }
-})
-```
-
-### Image Processing Pipeline
-
-Process uploaded images with progress tracking:
-
-```typescript
-// server/jobs/ProcessImage.ts
-export default defineJob({
-  queue: 'media',
-  async handle(data: { imageUrl: string, userId: string }, job) {
-    // Download
-    await job.updateProgress(10)
-    const image = await downloadImage(data.imageUrl)
-    
-    // Resize variants
-    await job.updateProgress(30)
-    const thumbnail = await sharp(image).resize(200, 200).toBuffer()
-    
-    await job.updateProgress(50)
-    const medium = await sharp(image).resize(800, 800).toBuffer()
-    
-    await job.updateProgress(70)
-    const large = await sharp(image).resize(1920, 1920).toBuffer()
-    
-    // Upload to storage
-    await job.updateProgress(85)
-    const urls = await uploadImages({ thumbnail, medium, large })
-    
-    // Save to database
-    await job.updateProgress(95)
-    await db.images.create({
-      userId: data.userId,
-      original: data.imageUrl,
-      ...urls
-    })
-    
+  async handle(data, job) {
     await job.updateProgress(100)
-    return urls
+    return { ok: true }
   },
-  options: {
-    attempts: 2,
-    timeout: 60000 // 1 minute
-  }
+  async onCompleted(job, result) {},
+  async onFailed(job, error) {},
 })
 ```
 
-### Scheduled Reports
+### `dispatch(jobName, data, options?)`
 
-Generate and email reports:
+Server runtime helper that creates a job and returns reactive refs:
 
-```typescript
-// server/jobs/GenerateMonthlyReport.ts
-export default defineJob({
-  queue: 'reports',
-  async handle(data: { userId: string, month: string }) {
-    // Fetch data
-    const userData = await db.analytics.findByMonth(data.userId, data.month)
-    
-    // Generate PDF
-    const pdf = await generatePDF({
-      template: 'monthly-report',
-      data: userData
-    })
-    
-    // Upload
-    const url = await uploadToS3(pdf, `reports/${data.userId}/${data.month}.pdf`)
-    
-    // Email user
-    await dispatch('SendEmail', {
-      to: userData.email,
-      subject: `Your ${data.month} Report`,
-      body: `Your report is ready: ${url}`
-    })
-    
-    return { reportUrl: url }
-  },
-  options: {
-    attempts: 1,
-    timeout: 300000 // 5 minutes
-  }
-})
-
-// Schedule with cron or manually
-// server/api/schedule-reports.post.ts
-export default defineEventHandler(async () => {
-  const users = await db.users.findAll()
-  const month = new Date().toISOString().slice(0, 7) // YYYY-MM
-  
-  for (const user of users) {
-    await dispatch('GenerateMonthlyReport', {
-      userId: user.id,
-      month
-    })
-  }
-  
-  return { scheduled: users.length }
-})
+```ts
+const { jobId, queueName, progress, status, result, error, refresh, cancel, retry } =
+  await dispatch('SendEmail', { to: 'user@example.com' })
 ```
 
-### Webhook Processing
+### `useQueue(queueName?)`
 
-Handle incoming webhooks asynchronously:
-
-```typescript
-// server/jobs/ProcessStripeWebhook.ts
-export default defineJob({
-  queue: 'webhooks',
-  async handle(data: { event: string, payload: any }) {
-    switch (data.event) {
-      case 'payment_intent.succeeded':
-        await handlePaymentSuccess(data.payload)
-        break
-      case 'customer.subscription.updated':
-        await handleSubscriptionUpdate(data.payload)
-        break
-      case 'invoice.payment_failed':
-        await handlePaymentFailure(data.payload)
-        break
-    }
-  },
-  options: {
-    attempts: 5,
-    backoff: { type: 'exponential', delay: 5000 }
-  },
-  async onFailed(job, error) {
-    // Alert on webhook processing failure
-    await sendAlert({
-      type: 'webhook_failed',
-      event: job.data.event,
-      error: error.message
-    })
-  }
-})
-
-// server/api/webhooks/stripe.post.ts
-export default defineEventHandler(async (event) => {
-  const payload = await readBody(event)
-  
-  // Verify webhook signature
-  const signature = getHeader(event, 'stripe-signature')
-  const verified = verifyStripeSignature(payload, signature)
-  
-  if (!verified) {
-    throw createError({ statusCode: 401, message: 'Invalid signature' })
-  }
-  
-  // Queue for processing
-  await dispatch('ProcessStripeWebhook', {
-    event: payload.type,
-    payload: payload.data
-  })
-  
-  return { received: true }
-})
+```ts
+const queue = useQueue('default')
+const job = await queue.add('SendEmail', { to: 'user@example.com' })
 ```
 
-### Batch Data Export
+### `useServerQueue(queueName?)`
 
-Export large datasets with progress:
+Returns BullMQ `Queue` directly (advanced/non-reactive):
 
-```typescript
-// server/jobs/ExportUserData.ts
-export default defineJob({
-  queue: 'exports',
-  async handle(data: { userId: string, format: 'csv' | 'json' }, job) {
-    const BATCH_SIZE = 1000
-    
-    // Count total records
-    const total = await db.userRecords.count({ userId: data.userId })
-    let processed = 0
-    
-    const records = []
-    
-    // Process in batches
-    for (let offset = 0; offset < total; offset += BATCH_SIZE) {
-      const batch = await db.userRecords.findMany({
-        where: { userId: data.userId },
-        skip: offset,
-        take: BATCH_SIZE
-      })
-      
-      records.push(...batch)
-      processed += batch.length
-      
-      await job.updateProgress(Math.round((processed / total) * 100))
-    }
-    
-    // Generate file
-    const file = data.format === 'csv' 
-      ? generateCSV(records)
-      : JSON.stringify(records, null, 2)
-    
-    // Upload
-    const url = await uploadToS3(file, `exports/${data.userId}.${data.format}`)
-    
-    // Notify user
-    await dispatch('SendEmail', {
-      to: data.userId,
-      subject: 'Your data export is ready',
-      body: `Download: ${url}`
-    })
-    
-    return { url, recordCount: total }
-  },
-  options: {
-    timeout: 600000 // 10 minutes
-  }
-})
+```ts
+const queue = useServerQueue('emails')
+await queue.add('send-email', { to: 'user@example.com' })
 ```
+
+### `useQueueStats(queueName = 'default')`
+
+```ts
+const { stats, loading, error, refresh } = useQueueStats()
+await refresh()
+```
+
+### REST endpoints
+
+- `POST /api/queue/add`
+- `GET /api/queue/:queueName/:jobId`
+- `GET /api/queue/:queueName/:jobId/events`
+- `POST /api/queue/:queueName/:jobId/cancel`
+- `POST /api/queue/:queueName/:jobId/retry`
+- `GET /api/queue/:queueName/stats`
 
 ## Troubleshooting
 
-### Redis Connection Issues
+### Job not registered
 
-**Problem:** Worker can't connect to Redis
+- Ensure file is under configured `jobsDir`
+- Ensure default export is `defineJob({ ... })`
+- Restart dev server and worker after adding new files
 
-```
-Error: connect ECONNREFUSED 127.0.0.1:6379
-```
+### Worker is running but jobs do not process
 
-**Solutions:**
-1. Ensure Redis is running: `redis-cli ping` (should return `PONG`)
-2. Check Redis host/port in config or env vars
-3. Verify firewall rules allow connection
-4. For Docker: use service name instead of `localhost`
+- Confirm Redis is reachable from worker process
+- Confirm queue names match (`job.queue` vs worker `--queue/--queues`)
 
-### Jobs Not Processing
+### No real-time updates
 
-**Problem:** Jobs added but never processed
+- Ensure worker is running (worker publishes events)
+- Check network/proxy supports SSE
 
-**Solutions:**
-1. Ensure worker is running: `npx nuxt-queuekit worker`
-2. Check worker is listening to correct queue
-3. Verify job is added to correct queue name
-4. Check worker logs for errors
-
-### Job Failures
-
-**Problem:** Jobs failing repeatedly
-
-**Solutions:**
-1. Check job logs: `console.log` in job handler
-2. Add error handling in job:
-```typescript
-export default defineJob({
-  async handle(data) {
-    try {
-      await riskyOperation(data)
-    } catch (error) {
-      console.error('Job failed:', error)
-      throw error // Re-throw to trigger retry
-    }
-  }
-})
-```
-3. Increase retry attempts in job options
-4. Add `onFailed` hook to debug
-
-### Memory Issues
-
-**Problem:** Worker consuming too much memory
-
-**Solutions:**
-1. Reduce concurrency: `--concurrency 2`
-2. Process large data in chunks
-3. Clear references after processing
-4. Run multiple workers with lower concurrency each
-
-### Stale Jobs
-
-**Problem:** Old jobs stuck in queue
-
-**Solutions:**
-1. Add job timeout:
-```typescript
-options: {
-  timeout: 30000 // 30 seconds
-}
-```
-2. Enable auto-cleanup:
-```typescript
-options: {
-  removeOnComplete: true,
-  removeOnFail: { age: 86400 } // Remove after 24h
-}
-```
-3. Manually clean with BullMQ utilities
-
-### TypeScript Errors
-
-**Problem:** `defineJob` not recognized
-
-**Solution:** Ensure job-loader plugin is running. It's automatically loaded by the module.
-
-**Problem:** Type errors in job data
-
-**Solution:** Add type parameter:
-```typescript
-interface MyJobData {
-  userId: string
-  action: string
-}
-
-export default defineJob<MyJobData>({
-  async handle(data) {
-    // data is typed as MyJobData
-  }
-})
-```
-
-### Development vs Production
-
-**Problem:** Works in dev but not production
-
-**Solutions:**
-1. Ensure Redis is accessible in production
-2. Check environment variables are set
-3. Verify worker is deployed and running
-4. Check build includes job files
-5. Review production logs for errors
-
-## Architecture
-
-Nuxt Queue uses a **two-process architecture** for reliability and performance:
-
-### Process Separation
-
-```
-┌─────────────────────┐         ┌─────────┐         ┌──────────────────┐
-│   Nuxt Web App      │────────▶│  Redis  │◀────────│  Worker Process  │
-│   (Add Jobs)        │         │  Queue  │         │  (Process Jobs)  │
-│                     │         │         │         │                  │
-│ - API Routes        │         │ - Job   │         │ - Job Handlers   │
-│ - Server Handlers   │         │   Queue │         │ - Auto-discovery │
-│ - Client Code       │         │ - State │         │ - Concurrency    │
-└─────────────────────┘         └─────────┘         └──────────────────┘
-```
-
-### Why Two Processes?
-
-1. **Reliability** - Workers keep running even if web server restarts
-2. **Performance** - Heavy job processing doesn't block HTTP requests
-3. **Scalability** - Run multiple worker instances independently
-4. **Resource Management** - Allocate different resources to web vs workers
-
-### How It Works
-
-1. **Web App** adds jobs to Redis queue via `dispatch()` or `useQueue()`
-2. **Redis** stores jobs and manages queue state
-3. **Worker** polls Redis, processes jobs, updates status
-4. **Web App** can check job status via API endpoints
-
-### Scaling Pattern
-
-```bash
-# Single web server
-Web Server (1 instance)
-
-# Multiple workers for different workloads
-Worker - Critical Queue (5 instances, high concurrency)
-Worker - Default Queue (3 instances, medium concurrency)
-Worker - Reports Queue (1 instance, low concurrency)
-```
-
-## Requirements
-
-- **Node.js** 20 or higher
-- **Redis** 6 or higher
-- **Nuxt** 3 or higher
-
-## Roadmap
-
-We're actively working on exciting new features:
-
-### 🔄 Multiple Queue Drivers
-Support for additional storage backends beyond Redis:
-- **Memory Driver** - In-memory queue for development and testing
-- **Database Driver** - PostgreSQL, MySQL, SQLite support for persistent queues without Redis
-
-### ⏰ Job Scheduling
-Built-in cron job scheduling capabilities:
-- Schedule recurring jobs with cron expressions
-- Delayed job execution
-- Timezone-aware scheduling
-- Job calendar management
-
-### 📊 Management UI
-Visual dashboard for queue monitoring and management:
-- **Flow Diagrams** - Visualize job dependencies and workflows
-- **Timeline View** - Track job execution history and patterns
-- **Job Scheduler** - Visual cron job configuration
-- **Real-time Monitoring** - Live queue stats and job progress
-- **Job Management** - Retry, cancel, and inspect jobs from the UI
-
-Want to contribute or suggest features? [Open an issue](https://github.com/cobraprojects/nuxt-queuekit/issues)!
-
-## Contribution
-
-<details>
-  <summary>Local development</summary>
-  
-  ```bash
-  # Install dependencies
-  npm install
-  
-  # Generate type stubs
-  npm run dev:prepare
-  
-  # Develop with the playground
-  npm run dev
-  
-  # In another terminal, start workers
-  npx nuxt-queuekit worker --cwd playground
-  
-  # Build the playground
-  npm run dev:build
-  
-  # Run ESLint
-  npm run lint
-  
-  # Run Vitest
-  npm run test
-  npm run test:watch
-  
-  # Type check
-  npm run test:types
-  
-  # Release new version
-  npm run release
-  ```
-
-</details>
+---
 
 ## License
 
-MIT
+[MIT License](./LICENSE)
 
 <!-- Badges -->
 [npm-version-src]: https://img.shields.io/npm/v/nuxt-queuekit/latest.svg?style=flat&colorA=020420&colorB=00DC82
 [npm-version-href]: https://npmjs.com/package/nuxt-queuekit
-
 [npm-downloads-src]: https://img.shields.io/npm/dm/nuxt-queuekit.svg?style=flat&colorA=020420&colorB=00DC82
 [npm-downloads-href]: https://npm.chart.dev/nuxt-queuekit
-
 [license-src]: https://img.shields.io/npm/l/nuxt-queuekit.svg?style=flat&colorA=020420&colorB=00DC82
 [license-href]: https://npmjs.com/package/nuxt-queuekit
-
-[nuxt-src]: https://img.shields.io/badge/Nuxt-020420?logo=nuxt
+[nuxt-src]: https://img.shields.io/badge/Nuxt-020420?logo=nuxt.js
 [nuxt-href]: https://nuxt.com

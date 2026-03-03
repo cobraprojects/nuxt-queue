@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty'
 import { consola } from 'consola'
-import { resolve } from 'pathe'
+import { resolve, relative } from 'pathe'
 import { loadNuxtConfig } from '@nuxt/kit'
 import { Worker, type Processor, type ConnectionOptions, type Job } from 'bullmq'
 import { pathToFileURL } from 'node:url'
@@ -16,6 +16,51 @@ interface JobEvent {
   result?: unknown
   error?: string
   timestamp: number
+}
+
+interface JobFile {
+  path: string
+  name: string
+}
+
+async function scanJobFiles(dir: string, baseDir: string): Promise<JobFile[]> {
+  const results: JobFile[] = []
+
+  try {
+    const { readdirSync, statSync } = await import('node:fs')
+    const entries = readdirSync(dir)
+
+    for (const entry of entries) {
+      const fullPath = resolve(dir, entry)
+      const stat = statSync(fullPath)
+
+      if (stat.isDirectory()) {
+        // Recursively scan subdirectories
+        const subResults = await scanJobFiles(fullPath, baseDir)
+        results.push(...subResults)
+      }
+      else if (stat.isFile()) {
+        // Check if it's a valid job file
+        if ((entry.endsWith('.ts') || entry.endsWith('.js') || entry.endsWith('.mjs'))
+          && !entry.endsWith('.d.ts')) {
+          // Get relative path from base directory and use it as job name
+          const relativePath = relative(baseDir, fullPath)
+          const jobName = relativePath.replace(/\.(ts|js|mjs)$/, '').replace(/\//g, '.')
+
+          results.push({
+            path: fullPath,
+            name: jobName,
+          })
+        }
+      }
+    }
+  }
+  catch (error: unknown) {
+    const err = error as Error
+    consola.error(`Failed to scan directory ${dir}:`, err.message)
+  }
+
+  return results
 }
 
 async function publishJobEvent(redis: Redis, event: JobEvent): Promise<void> {
@@ -149,50 +194,6 @@ export default defineCommand({
 
         // Make defineJob available globally for job files
         ;(globalThis as Record<string, unknown>).defineJob = defineJobFn
-
-        /**
-         * Recursively scan directory for job files
-         */
-        async function scanJobFiles(dir: string, baseDir: string): Promise<Array<{ path: string, name: string }>> {
-          const results: Array<{ path: string, name: string }> = []
-
-          try {
-            const { readdirSync, statSync } = await import('node:fs')
-            const { relative } = await import('pathe')
-            const entries = readdirSync(dir)
-
-            for (const entry of entries) {
-              const fullPath = resolve(dir, entry)
-              const stat = statSync(fullPath)
-
-              if (stat.isDirectory()) {
-                // Recursively scan subdirectories
-                const subResults = await scanJobFiles(fullPath, baseDir)
-                results.push(...subResults)
-              }
-              else if (stat.isFile()) {
-                // Check if it's a valid job file
-                if ((entry.endsWith('.ts') || entry.endsWith('.js') || entry.endsWith('.mjs'))
-                  && !entry.endsWith('.d.ts')) {
-                  // Get relative path from base directory and use it as job name
-                  const relativePath = relative(baseDir, fullPath)
-                  const jobName = relativePath.replace(/\.(ts|js|mjs)$/, '').replace(/\//g, '.')
-
-                  results.push({
-                    path: fullPath,
-                    name: jobName,
-                  })
-                }
-              }
-            }
-          }
-          catch (error: unknown) {
-            const err = error as Error
-            consola.error(`Failed to scan directory ${dir}:`, err.message)
-          }
-
-          return results
-        }
 
         try {
           const { existsSync } = await import('node:fs')

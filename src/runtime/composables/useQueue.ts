@@ -88,11 +88,17 @@ export function useQueue(queueName = 'default') {
           }
 
           eventSource.onerror = () => {
+            // Set failed state so caller knows
+            status.value = 'failed'
+            error.value = 'Failed to connect to job events'
             eventSource.close()
             eventSources.delete(eventSource)
           }
         }
         catch (err) {
+          // Set failed state when EventSource creation fails
+          status.value = 'failed'
+          error.value = 'Failed to connect to job events'
           console.error('Failed to create EventSource:', err)
         }
       }

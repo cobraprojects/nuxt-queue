@@ -1,7 +1,13 @@
 import { defineEventHandler, getRouterParam, createError, setResponseStatus } from 'h3'
 import { subscribeToJob } from '../../../../utils/pubsub'
 import { useQueueConnection } from '../../../../utils/composables'
-import type { RedisOptions } from 'ioredis'
+
+/**
+ * Type guard to check if connection has Redis options
+ */
+function isRedisOptions(conn: unknown): conn is { host: string, port: number, password?: string, username?: string, db: number } {
+  return typeof conn === 'object' && conn !== null && 'host' in conn && 'port' in conn
+}
 
 export default defineEventHandler(async (event) => {
   const queueName = getRouterParam(event, 'queueName')
@@ -22,10 +28,27 @@ export default defineEventHandler(async (event) => {
 
   setResponseStatus(event, 200)
 
-  const connection = useQueueConnection() as RedisOptions
+  const connection = useQueueConnection()
+
+  if (!isRedisOptions(connection)) {
+    throw createError({
+      statusCode: 500,
+      message: 'Invalid Redis connection configuration',
+    })
+  }
 
   // Send initial connection message
   event.node.res.write('data: {"type":"connected"}\n\n')
+
+  // Keep connection alive with heartbeat
+  const heartbeat = setInterval(() => {
+    event.node.res.write(': heartbeat\n\n')
+  }, 30000) // Every 30 seconds
+
+  // Cleanup function
+  const cleanup = () => {
+    clearInterval(heartbeat)
+  }
 
   try {
     // Subscribe to job events
@@ -40,28 +63,27 @@ export default defineEventHandler(async (event) => {
         // Close connection if job is completed or failed
         if (jobEvent.type === 'completed' || jobEvent.type === 'failed') {
           setTimeout(() => {
+            cleanup()
+            unsubscribe()
             event.node.res.end()
           }, 100)
         }
       },
     )
 
-    // Handle client disconnect
-    event.node.req.on('close', () => {
+    // Enhanced cleanup with unsubscribe
+    const enhancedCleanup = () => {
+      cleanup()
       unsubscribe()
-    })
+    }
 
-    // Keep connection alive with heartbeat
-    const heartbeat = setInterval(() => {
-      event.node.res.write(': heartbeat\n\n')
-    }, 30000) // Every 30 seconds
-
-    event.node.req.on('close', () => {
-      clearInterval(heartbeat)
-    })
+    // Handle client disconnect
+    event.node.req.on('close', enhancedCleanup)
+    event.node.req.on('error', enhancedCleanup)
   }
   catch (error) {
     console.error('SSE error:', error)
+    cleanup()
     event.node.res.end()
   }
 })

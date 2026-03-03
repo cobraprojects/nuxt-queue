@@ -11,11 +11,16 @@ import type { JobDefinition } from '../utils/defineJob'
 // Import useRuntimeConfig from #imports
 import { useRuntimeConfig } from '#imports'
 
+interface JobFile {
+  path: string
+  name: string
+}
+
 /**
  * Recursively scan directory for job files
  */
-async function scanJobFiles(dir: string, baseDir: string): Promise<Array<{ path: string, name: string }>> {
-  const results: Array<{ path: string, name: string }> = []
+async function scanJobFiles(dir: string, baseDir: string): Promise<JobFile[]> {
+  const results: JobFile[] = []
 
   try {
     const entries = await readdir(dir)

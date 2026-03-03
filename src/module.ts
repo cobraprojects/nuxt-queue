@@ -85,6 +85,21 @@ export default defineNuxtModule<ModuleOptions>({
       handler: resolver.resolve('./runtime/server/api/queue/[queueName]/[jobId]/events.get'),
     })
 
+    addServerHandler({
+      route: '/api/queue/:queueName/:jobId/cancel',
+      handler: resolver.resolve('./runtime/server/api/queue/[queueName]/[jobId]/cancel.post'),
+    })
+
+    addServerHandler({
+      route: '/api/queue/:queueName/:jobId/retry',
+      handler: resolver.resolve('./runtime/server/api/queue/[queueName]/[jobId]/retry.post'),
+    })
+
+    addServerHandler({
+      route: '/api/queue/:queueName/stats',
+      handler: resolver.resolve('./runtime/server/api/queue/[queueName]/stats.get'),
+    })
+
     // Add plugin
     addPlugin(resolver.resolve('./runtime/plugin'))
 

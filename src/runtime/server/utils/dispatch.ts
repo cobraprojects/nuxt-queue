@@ -1,26 +1,27 @@
-import type { JobsOptions } from 'bullmq'
+import type { ConnectionOptions, JobsOptions } from 'bullmq'
 import { ref, type Ref } from 'vue'
 import { getJob } from './jobRegistry'
 import { useQueueConnection } from './composables'
 import { subscribeToJob } from './pubsub'
+import type { JobResponse } from '../../composables/useQueue'
+
+// Re-export for convenience
+export type { JobResponse }
 
 export interface DispatchOptions extends Omit<JobsOptions, 'jobId'> {
   queue?: string
 }
 
-export interface JobResponse<R = unknown> {
-  jobId: string
-  queueName: string
-  progress: Ref<number>
-  status: Ref<'waiting' | 'active' | 'completed' | 'failed' | 'delayed'>
-  result: Ref<R | null>
-  error: Ref<string | null>
-  refresh: () => Promise<void>
+/**
+ * Type guard to check if connection has Redis options
+ */
+function isRedisOptions(conn: ConnectionOptions): conn is { host: string, port: number, password?: string, username?: string, db: number } {
+  return 'host' in conn && 'port' in conn
 }
 
 /**
  * Dispatch a job by name (File-Based Jobs API)
- * Works on both client and server, returns reactive refs with real-time updates
+ * Server runtime helper that returns reactive refs with real-time updates
  *
  * @example
  * ```typescript
@@ -51,7 +52,7 @@ export async function dispatch<T = unknown, R = unknown>(
     ...options,
   }
 
-  // Call the API endpoint (works on both client and server)
+  // Call the API endpoint
   const response = await $fetch<{ jobId: string }>('/api/queue/add', {
     method: 'POST',
     body: {
@@ -73,7 +74,7 @@ export async function dispatch<T = unknown, R = unknown>(
   // Subscribe to job events via Redis Pub/Sub (server-side)
   const connection = useQueueConnection()
   // ConnectionOptions can be Redis or Cluster, we only support Redis for now
-  if ('host' in connection) {
+  if (isRedisOptions(connection)) {
     const redisOptions = {
       host: connection.host,
       port: connection.port,
@@ -81,7 +82,16 @@ export async function dispatch<T = unknown, R = unknown>(
       username: connection.username,
       db: connection.db,
     }
-    await subscribeToJob(redisOptions, queueName, jobId, (event) => {
+    let unsubscribe: (() => Promise<void>) | null = null
+    let isUnsubscribed = false
+    const safeUnsubscribe = async () => {
+      if (unsubscribe && !isUnsubscribed) {
+        isUnsubscribed = true
+        await unsubscribe()
+      }
+    }
+
+    unsubscribe = await subscribeToJob(redisOptions, queueName, jobId, (event) => {
       if (event.type === 'progress') {
         progress.value = event.progress ?? 0
       }
@@ -92,15 +102,28 @@ export async function dispatch<T = unknown, R = unknown>(
         status.value = 'completed'
         result.value = event.result as R ?? null
         progress.value = 100
+        void safeUnsubscribe()
       }
       else if (event.type === 'failed') {
         status.value = 'failed'
         error.value = event.error ?? 'Unknown error'
+        void safeUnsubscribe()
       }
       else if (event.type === 'waiting') {
         status.value = 'waiting'
       }
     })
+  }
+
+  // Utility methods
+  const cancel = async () => {
+    // @ts-expect-error - $fetch type inference issue with dynamic routes
+    await $fetch(`/api/queue/${queueName}/${jobId}/cancel`, { method: 'POST' })
+  }
+
+  const retry = async () => {
+    // @ts-expect-error - $fetch type inference issue with dynamic routes
+    await $fetch(`/api/queue/${queueName}/${jobId}/retry`, { method: 'POST' })
   }
 
   // Utility method to manually refresh status
@@ -125,6 +148,8 @@ export async function dispatch<T = unknown, R = unknown>(
     status,
     result: result as Ref<R | null>,
     error,
+    cancel,
+    retry,
     refresh,
   }
 }

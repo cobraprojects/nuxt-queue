@@ -164,7 +164,6 @@ describe('defineWorker', () => {
     const processor = vi.fn(async (_job: Job) => ({ success: true }))
     const onCompleted = vi.fn(async (_job: Job, _result: { success: boolean }) => {
       await new Promise(resolve => setTimeout(resolve, 10))
-      console.log('Async handler completed')
     })
 
     const workerFactory = defineWorker({
